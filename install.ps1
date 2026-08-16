@@ -9,6 +9,7 @@ $backupDir = Join-Path $macastDir 'backup'
 New-Item -ItemType Directory -Force $rendererDir | Out-Null
 Copy-Item -Force (Join-Path $projectDir 'lanerc_proxy.py') (Join-Path $rendererDir 'lanerc_proxy.py')
 Copy-Item -Force (Join-Path $projectDir 'lanerc_potplayer.py') (Join-Path $rendererDir 'lanerc_potplayer.py')
+Copy-Item -Force (Join-Path $projectDir 'lanerc_tv.py') (Join-Path $rendererDir 'lanerc_tv.py')
 
 $potPlayerCandidates = @(
     'D:\PotPlayer\PotPlayerMini64.exe',
@@ -31,6 +32,17 @@ foreach ($registryPath in @('HKCU:\Software\DAUM\PotPlayer64', 'HKCU:\Software\D
 
 $potPlayer = $potPlayerCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 $selectedRenderer = if ($potPlayer) { 'Lanerc PotPlayer Renderer' } else { 'Lanerc MPV Renderer' }
+$ffmpegCandidates = @(
+    'D:\Macast\tools\ffmpeg\bin\ffmpeg.exe',
+    'D:\ffmpeg\bin\ffmpeg.exe',
+    'C:\ffmpeg\bin\ffmpeg.exe',
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\ffmpeg.exe')
+)
+$ffmpegCommand = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+if ($ffmpegCommand) {
+    $ffmpegCandidates = @($ffmpegCommand.Source) + $ffmpegCandidates
+}
+$ffmpeg = $ffmpegCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 
 if (Test-Path $settingsPath) {
     New-Item -ItemType Directory -Force $backupDir | Out-Null
@@ -39,10 +51,24 @@ if (Test-Path $settingsPath) {
 
     $settings = Get-Content -Raw $settingsPath | ConvertFrom-Json
     $settings | Add-Member -NotePropertyName Macast_Renderer -NotePropertyValue $selectedRenderer -Force
+    if (-not $settings.PSObject.Properties['LanercTVIP']) {
+        $settings | Add-Member -NotePropertyName LanercTVIP -NotePropertyValue ''
+    }
+    if (-not $settings.PSObject.Properties['LanercFFmpegPath']) {
+        $settings | Add-Member -NotePropertyName LanercFFmpegPath -NotePropertyValue $(if ($ffmpeg) { $ffmpeg } else { '' })
+    }
+    if (-not $settings.PSObject.Properties['LanercRelayPort']) {
+        $settings | Add-Member -NotePropertyName LanercRelayPort -NotePropertyValue 0
+    }
     $json = $settings | ConvertTo-Json -Depth 10
     [IO.File]::WriteAllText($settingsPath, $json, [Text.UTF8Encoding]::new($false))
 }
 
 Write-Host "Installed renderers in: $rendererDir"
 Write-Host "Macast renderer selected: $selectedRenderer"
+if ($ffmpeg) {
+    Write-Host "TV relay FFmpeg: $ffmpeg"
+} else {
+    Write-Warning 'Lanerc TV Renderer requires ffmpeg.exe. Install FFmpeg or set LanercFFmpegPath.'
+}
 Write-Host 'Exit Macast completely and start it again to load the plugin.'

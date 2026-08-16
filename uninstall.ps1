@@ -4,7 +4,7 @@ $macastDir = Join-Path $env:LOCALAPPDATA 'xfangfang\Macast'
 $rendererDir = Join-Path $macastDir 'renderer'
 $settingsPath = Join-Path $macastDir 'macast_setting.json'
 
-foreach ($name in @('lanerc_proxy.py', 'lanerc_potplayer.py')) {
+foreach ($name in @('lanerc_proxy.py', 'lanerc_potplayer.py', 'lanerc_tv.py')) {
     $path = Join-Path $rendererDir $name
     if (Test-Path -LiteralPath $path) {
         Remove-Item -LiteralPath $path -Force
