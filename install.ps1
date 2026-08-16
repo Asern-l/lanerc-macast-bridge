@@ -54,8 +54,8 @@ if (Test-Path $settingsPath) {
     if (-not $settings.PSObject.Properties['LanercTVIP']) {
         $settings | Add-Member -NotePropertyName LanercTVIP -NotePropertyValue ''
     }
-    if (-not $settings.PSObject.Properties['LanercFFmpegPath']) {
-        $settings | Add-Member -NotePropertyName LanercFFmpegPath -NotePropertyValue $(if ($ffmpeg) { $ffmpeg } else { '' })
+    if (-not $settings.PSObject.Properties['LanercFFmpegPath'] -or -not $settings.LanercFFmpegPath) {
+        $settings | Add-Member -NotePropertyName LanercFFmpegPath -NotePropertyValue $(if ($ffmpeg) { $ffmpeg } else { '' }) -Force
     }
     if (-not $settings.PSObject.Properties['LanercRelayPort']) {
         $settings | Add-Member -NotePropertyName LanercRelayPort -NotePropertyValue 0
