@@ -94,6 +94,25 @@ class DeviceDescriptionTests(unittest.TestCase):
         )
         self.assertEqual(headers["location"], "http://192.168.1.20/device.xml")
 
+    def test_candidate_interfaces_include_macast_interfaces_and_skip_loopback(self):
+        original_get_ip = getattr(tv.Setting, "get_ip", None)
+        original_active = tv.DLNAController._active_ipv4
+        tv.Setting.get_ip = staticmethod(
+            lambda: {("192.168.1.10", "255.255.255.0"), ("127.0.0.1", "255.0.0.0")}
+        )
+        tv.DLNAController._active_ipv4 = staticmethod(lambda: "10.0.0.5")
+        try:
+            self.assertEqual(
+                tv.DLNAController._candidate_ipv4s(),
+                ["10.0.0.5", "192.168.1.10"],
+            )
+        finally:
+            if original_get_ip is None:
+                delattr(tv.Setting, "get_ip")
+            else:
+                tv.Setting.get_ip = original_get_ip
+            tv.DLNAController._active_ipv4 = staticmethod(original_active)
+
 
 class FakeResponse:
     content = b"ok"

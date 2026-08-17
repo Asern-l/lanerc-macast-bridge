@@ -3,266 +3,125 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lanerc Cast Pro</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --ink: #17202a;
-      --muted: #66727f;
-      --line: #d8dee5;
-      --surface: #ffffff;
-      --canvas: #f4f6f8;
-      --accent: #087e8b;
-      --accent-dark: #05636d;
-      --selected: #e7f4f3;
-      --danger: #a63c32;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-width: 320px;
-      background: var(--canvas);
-      color: var(--ink);
-      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-      letter-spacing: 0;
-    }
-    header {
-      background: #17202a;
-      color: #fff;
-      border-bottom: 4px solid var(--accent);
-    }
-    .header-inner, main { width: min(960px, calc(100% - 32px)); margin: 0 auto; }
-    .header-inner { min-height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-    .brand { display: flex; align-items: center; gap: 14px; }
-    .brand-mark {
-      width: 38px; height: 38px; border: 2px solid #7bd2d8; border-radius: 5px;
-      display: grid; place-items: center; color: #7bd2d8; font-weight: 700; font-size: 15px;
-    }
-    h1 { margin: 0; font-size: 21px; font-weight: 650; }
-    .subtitle { margin-top: 3px; color: #b9c3cc; font-size: 13px; }
-    .status { display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: #53c878; }
-    main { padding: 28px 0 44px; }
-    section { padding: 22px 0 26px; border-bottom: 1px solid var(--line); }
-    section:first-child { padding-top: 0; }
-    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-    h2 { margin: 0; font-size: 15px; font-weight: 650; }
-    .mode-tabs { display: grid; grid-template-columns: 1fr 1fr; width: min(100%, 520px); border: 1px solid #adb7c1; border-radius: 6px; overflow: hidden; }
-    .mode-tabs button { border: 0; border-right: 1px solid #adb7c1; border-radius: 0; background: var(--surface); color: var(--ink); }
-    .mode-tabs button:last-child { border-right: 0; }
-    .mode-tabs button.active { background: var(--accent); color: white; }
-    button {
-      min-height: 40px; padding: 0 16px; border: 1px solid #aeb8c2; border-radius: 6px;
-      background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer;
-    }
-    button:hover { border-color: var(--accent); }
-    button:focus-visible, select:focus-visible { outline: 3px solid #9bdde2; outline-offset: 2px; }
-    button.primary { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
-    button.primary:hover { background: var(--accent-dark); }
-    button:disabled { cursor: wait; opacity: .55; }
-    .panel { display: none; }
-    .panel.active { display: block; }
-    .field { max-width: 520px; }
-    label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
-    select {
-      width: 100%; min-height: 42px; padding: 0 38px 0 12px; border: 1px solid #aeb8c2;
-      border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit;
-    }
-    .availability { margin-top: 10px; color: var(--muted); font-size: 12px; }
-    .device-list { display: grid; gap: 8px; }
-    .audio-field { margin-top: 18px; }
-    .delay-label { margin-top: 14px; }
-    .delay-slider { width: 100%; }
-    .check-field { display: flex; align-items: center; gap: 9px; margin-top: 16px; color: var(--ink); }
-    .check-field input { width: 18px; height: 18px; accent-color: var(--accent); }
-    .device {
-      width: 100%; min-height: 66px; padding: 11px 14px; display: grid;
-      grid-template-columns: 38px 1fr auto; align-items: center; gap: 12px; text-align: left;
-      background: var(--surface); border-color: var(--line);
-    }
-    .device.selected { border-color: var(--accent); background: var(--selected); box-shadow: inset 3px 0 var(--accent); }
-    .tv-icon { width: 31px; height: 22px; border: 2px solid #65717c; border-radius: 3px; position: relative; }
-    .tv-icon:after { content: ""; position: absolute; width: 13px; height: 2px; left: 7px; bottom: -6px; background: #65717c; }
-    .device strong { display: block; font-size: 14px; font-weight: 600; }
-    .device small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
-    .check { color: var(--accent); font-weight: 700; visibility: hidden; }
-    .device.selected .check { visibility: visible; }
-    .empty { padding: 30px 16px; border: 1px dashed #aeb8c2; color: var(--muted); text-align: center; }
-    .actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 22px; }
-    .message { min-height: 20px; margin-right: auto; align-self: center; color: var(--muted); font-size: 13px; }
-    .message.error { color: var(--danger); }
-    .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid #9aa6b1; border-top-color: transparent; border-radius: 50%; animation: spin .75s linear infinite; vertical-align: -2px; margin-right: 7px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @media (max-width: 620px) {
-      .header-inner, main { width: min(100% - 22px, 960px); }
-      .header-inner { min-height: 74px; }
-      .status { display: none; }
-      main { padding-top: 20px; }
-      section { padding: 18px 0 22px; }
-      .section-head { align-items: flex-start; }
-      .device { grid-template-columns: 34px minmax(0, 1fr) 18px; }
-      .device strong, .device small { overflow-wrap: anywhere; }
-      .actions { flex-wrap: wrap; }
-      .message { width: 100%; }
-      .actions button { flex: 1; }
-    }
-  </style>
+  <meta name="color-scheme" content="light">
+  <title>Lanerc Cast</title>
+  <link rel="icon" href="/assets/brand.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
-  <header>
-    <div class="header-inner">
+  <div class="app-shell">
+    <header class="app-header">
       <div class="brand">
-        <div class="brand-mark">LC</div>
-        <div><h1>Lanerc Cast Pro</h1><div class="subtitle">输出控制台</div></div>
+        <img src="/assets/brand.svg" width="40" height="40" alt="">
+        <div>
+          <div class="brand-line"><h1>Lanerc Cast</h1><span id="app-version" class="version">2.0.0</span></div>
+          <p>Macast 播放兼容与电视转码</p>
+        </div>
       </div>
-      <div class="status"><span class="dot"></span>Macast 服务在线</div>
-    </div>
-  </header>
-  <main>
-    <section>
-      <div class="section-head"><h2>输出方式</h2></div>
-      <div class="mode-tabs" role="tablist" aria-label="输出方式">
-        <button id="mode-local" role="tab" type="button">本机播放</button>
-        <button id="mode-tv" role="tab" type="button">电视中转</button>
+      <div id="service-state" class="service-state" role="status">
+        <span class="status-dot"></span><span>正在连接</span>
       </div>
-    </section>
-    <section id="local-panel" class="panel">
-      <div class="section-head"><h2>本机播放器</h2></div>
-      <div class="field">
-        <label for="player">播放器</label>
-        <select id="player">
-          <option value="potplayer">PotPlayer</option>
-          <option value="mpv">Macast MPV</option>
-        </select>
-        <div id="player-availability" class="availability"></div>
-      </div>
-    </section>
-    <section id="tv-panel" class="panel">
-      <div class="section-head">
-        <h2>可用电视</h2>
-        <button id="refresh" type="button">刷新设备</button>
-      </div>
-      <div id="devices" class="device-list" aria-live="polite"></div>
-      <div class="field audio-field">
-        <label for="tv-audio">声音输出</label>
-        <select id="tv-audio">
-          <option value="tv">电视扬声器</option>
-          <option value="computer">电脑默认音频设备（蓝牙耳机）</option>
-        </select>
-        <div class="availability">电脑输出时，电视只接收视频，PotPlayer 将最小化播放声音</div>
-        <label class="check-field" for="auto-sync">
-          <input id="auto-sync" type="checkbox" checked>
-          自动同步电视播放位置
-        </label>
-        <label class="delay-label" for="audio-delay">音频延迟 <output id="audio-delay-value">2.0 秒</output></label>
-        <input class="delay-slider" id="audio-delay" type="range" min="0" max="8" step="0.5" value="2">
-        <div class="availability">声音领先画面时增加延迟；声音落后时调低</div>
-      </div>
-    </section>
-    <div class="actions">
-      <div id="message" class="message"></div>
-      <button id="reset" type="button">撤销</button>
-      <button id="save" class="primary" type="button">应用设置</button>
-    </div>
-  </main>
-  <script>
-    const state = { mode: 'local', player: 'potplayer', tv_audio: 'tv', auto_sync: true, audio_delay: 2, selected_tv: '', devices: [], availability: {} };
-    let saved = {};
-    let refreshTimer = null;
-    const $ = id => document.getElementById(id);
+    </header>
 
-    function setMessage(text, error = false, loading = false) {
-      $('message').className = error ? 'message error' : 'message';
-      $('message').innerHTML = (loading ? '<span class="spinner"></span>' : '') + text;
-    }
-    function render() {
-      $('mode-local').classList.toggle('active', state.mode === 'local');
-      $('mode-tv').classList.toggle('active', state.mode === 'tv');
-      $('mode-local').setAttribute('aria-selected', String(state.mode === 'local'));
-      $('mode-tv').setAttribute('aria-selected', String(state.mode === 'tv'));
-      $('local-panel').classList.toggle('active', state.mode === 'local');
-      $('tv-panel').classList.toggle('active', state.mode === 'tv');
-      $('player').value = state.player;
-      $('tv-audio').value = state.tv_audio;
-      $('audio-delay').value = state.audio_delay;
-      $('auto-sync').checked = state.auto_sync;
-      $('audio-delay').disabled = state.auto_sync;
-      $('audio-delay-value').value = `${Number(state.audio_delay).toFixed(1)} 秒`;
-      const pot = state.availability.potplayer;
-      $('player').options[0].disabled = !pot;
-      $('player-availability').textContent = pot ? '已检测到 PotPlayer' : '未检测到 PotPlayer，将使用 Macast MPV';
-      const list = $('devices');
-      list.innerHTML = '';
-      if (!state.devices.length) {
-        list.innerHTML = '<div class="empty">未发现可用电视</div>';
-      } else {
-        state.devices.forEach(device => {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'device' + (state.selected_tv === device.host ? ' selected' : '');
-          button.innerHTML = '<span class="tv-icon"></span><span><strong></strong><small></small></span><span class="check">OK</span>';
-          button.querySelector('strong').textContent = device.name;
-          button.querySelector('small').textContent = device.host;
-          button.addEventListener('click', () => { state.selected_tv = device.host; render(); });
-          list.appendChild(button);
-        });
-      }
-      $('save').disabled = state.mode === 'tv' && !state.selected_tv;
-    }
-    async function loadStatus() {
-      const response = await fetch('/api/status');
-      if (!response.ok) throw new Error('无法读取运行状态');
-      Object.assign(state, await response.json());
-      saved = { mode: state.mode, player: state.player, tv_audio: state.tv_audio, auto_sync: state.auto_sync, audio_delay: state.audio_delay, selected_tv: state.selected_tv };
-      render();
-    }
-    async function discover(silent = false) {
-      if (!silent) setMessage('正在查找局域网电视', false, true);
-      $('refresh').disabled = true;
-      try {
-        const response = await fetch('/api/devices');
-        if (!response.ok) throw new Error('设备发现失败');
-        const data = await response.json();
-        state.devices = data.devices || [];
-        state.availability = data.availability || state.availability;
-        if (!silent) setMessage(`发现 ${state.devices.length} 台电视`);
-        render();
-      } catch (error) {
-        if (!silent) setMessage(error.message, true);
-      } finally {
-        $('refresh').disabled = false;
-      }
-    }
-    async function save() {
-      setMessage('正在应用设置', false, true);
-      $('save').disabled = true;
-      try {
-        const response = await fetch('/api/settings', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: state.mode, player: state.player, tv_audio: state.tv_audio, auto_sync: state.auto_sync, audio_delay: state.audio_delay, selected_tv: state.selected_tv })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || '设置保存失败');
-        saved = { mode: state.mode, player: state.player, tv_audio: state.tv_audio, auto_sync: state.auto_sync, audio_delay: state.audio_delay, selected_tv: state.selected_tv };
-        setMessage(state.mode === 'tv' ? '电视中转已启用' : '本机播放已启用');
-      } catch (error) {
-        setMessage(error.message, true);
-      } finally { render(); }
-    }
-    $('mode-local').addEventListener('click', () => { state.mode = 'local'; render(); });
-    $('mode-tv').addEventListener('click', () => { state.mode = 'tv'; render(); discover(true); });
-    $('player').addEventListener('change', event => { state.player = event.target.value; });
-    $('tv-audio').addEventListener('change', event => { state.tv_audio = event.target.value; });
-    $('auto-sync').addEventListener('change', event => { state.auto_sync = event.target.checked; render(); });
-    $('audio-delay').addEventListener('input', event => {
-      state.audio_delay = Number(event.target.value);
-      $('audio-delay-value').value = `${state.audio_delay.toFixed(1)} 秒`;
-    });
-    $('refresh').addEventListener('click', () => discover(false));
-    $('save').addEventListener('click', save);
-    $('reset').addEventListener('click', () => { Object.assign(state, saved); render(); setMessage(''); });
-    loadStatus().then(() => discover(true)).catch(error => setMessage(error.message, true));
-    refreshTimer = setInterval(() => { if (state.mode === 'tv') discover(true); }, 8000);
-  </script>
+    <main>
+      <div id="warning-list" class="notice-stack" aria-live="polite"></div>
+
+      <section class="section" aria-labelledby="output-heading">
+        <div class="section-title">
+          <div><span class="step">01</span><h2 id="output-heading">播放位置</h2></div>
+          <p>选择 Lanerc 投屏到本机后，媒体最终在哪里播放。</p>
+        </div>
+        <div class="choice-grid" role="radiogroup" aria-label="播放位置">
+          <button id="mode-local" class="choice" type="button" role="radio">
+            <span class="choice-title">本机播放</span>
+            <span class="choice-copy">使用 PotPlayer 或 Macast 内置播放器</span>
+          </button>
+          <button id="mode-tv" class="choice" type="button" role="radio">
+            <span class="choice-title">电视播放</span>
+            <span class="choice-copy">电脑兼容转码后发送到 DLNA 电视</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="local-panel" class="section mode-panel" aria-labelledby="player-heading">
+        <div class="section-title">
+          <div><span class="step">02</span><h2 id="player-heading">本机播放器</h2></div>
+          <p>优先选择已经安装且适合当前媒体的播放器。</p>
+        </div>
+        <div class="field-row">
+          <div class="field-grow">
+            <label for="player">默认播放器</label>
+            <select id="player">
+              <option value="potplayer">PotPlayer</option>
+              <option value="mpv">Macast 内置播放器</option>
+            </select>
+          </div>
+          <div id="player-state" class="inline-state"></div>
+        </div>
+      </section>
+
+      <section id="tv-panel" class="section mode-panel" aria-labelledby="tv-heading" hidden>
+        <div class="section-title section-title-action">
+          <div>
+            <div><span class="step">02</span><h2 id="tv-heading">目标电视</h2></div>
+            <p>扫描同一局域网内支持 DLNA 的电视或播放设备。</p>
+          </div>
+          <button id="refresh" class="button secondary" type="button">重新扫描</button>
+        </div>
+        <div id="devices" class="device-list" aria-live="polite"></div>
+        <p id="scan-meta" class="meta-line"></p>
+
+        <div class="subsection">
+          <h3>声音输出</h3>
+          <div class="radio-list">
+            <label class="radio-option">
+              <input type="radio" name="tv-audio" value="tv">
+              <span><strong>随电视输出</strong><small>推荐。电视负责画面与声音，同步最稳定。</small></span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="tv-audio" value="computer">
+              <span><strong>从电脑输出</strong><small>实验性。适合连接电脑的蓝牙耳机，可能需要同步补偿。</small></span>
+            </label>
+          </div>
+        </div>
+
+        <div id="sync-panel" class="subsection sync-panel" hidden>
+          <div class="sync-heading">
+            <div><h3>音画同步补偿</h3><p>电视缓冲时间因型号和网络而异。</p></div>
+            <span class="experimental">实验性</span>
+          </div>
+          <label class="switch-row" for="auto-sync">
+            <span><strong>尝试读取电视播放进度</strong><small>电视不提供有效进度时，自动使用下方固定延迟。</small></span>
+            <input id="auto-sync" type="checkbox" role="switch">
+          </label>
+          <div class="delay-control">
+            <label for="audio-delay">电脑声音延迟</label>
+            <output id="audio-delay-value" for="audio-delay">2.0 秒</output>
+            <input id="audio-delay" type="range" min="0" max="8" step="0.5" value="2">
+            <div class="range-labels"><span>0 秒</span><span>8 秒</span></div>
+          </div>
+        </div>
+      </section>
+
+      <details class="diagnostics">
+        <summary>运行环境</summary>
+        <dl>
+          <div><dt>PotPlayer</dt><dd id="diag-potplayer">正在检测</dd></div>
+          <div><dt>FFmpeg</dt><dd id="diag-ffmpeg">正在检测</dd></div>
+          <div><dt>控制服务</dt><dd id="diag-service">正在检测</dd></div>
+        </dl>
+      </details>
+    </main>
+
+    <footer class="action-bar">
+      <div id="message" class="message" role="status" aria-live="polite"></div>
+      <div class="action-buttons">
+        <button id="reset" class="button secondary" type="button">恢复已保存设置</button>
+        <button id="save" class="button primary" type="button">保存并应用</button>
+      </div>
+    </footer>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/assets/app.js" defer></script>
 </body>
 </html>

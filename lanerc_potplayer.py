@@ -1,13 +1,6 @@
 # Macast PotPlayer renderer with Lanerc HLS compatibility.
 #
-# Macast Metadata
-# <macast.title>Lanerc PotPlayer Renderer</macast.title>
-# <macast.renderer>LanercPotPlayerRenderer</macast.renderer>
-# <macast.platform>win32</macast.platform>
-# <macast.version>0.1.0</macast.version>
-# <macast.host_version>0.7</macast.host_version>
-# <macast.author>Asern-l</macast.author>
-# <macast.desc>Play Lanerc HLS streams with PotPlayer.</macast.desc>
+# Internal PotPlayer compatibility backend. Loaded by Lanerc Cast.
 
 import logging
 import os
@@ -81,8 +74,8 @@ class LanercPotPlayerRenderer(Renderer):
         if not self.player_path:
             cherrypy.engine.publish(
                 "app_notify",
-                "PotPlayer not found",
-                "Select Lanerc MPV Renderer or install PotPlayer.",
+                "未找到 PotPlayer",
+                "请在控制中心选择 Macast 内置播放器，或安装 PotPlayer。",
             )
             self.set_state_transport_error()
             return
@@ -106,7 +99,7 @@ class LanercPotPlayerRenderer(Renderer):
             logger.exception("Cannot start PotPlayer")
             self.playing = False
             self.set_state_transport_error()
-            cherrypy.engine.publish("app_notify", "PotPlayer error", str(exc))
+            cherrypy.engine.publish("app_notify", "PotPlayer 播放失败", str(exc))
 
     def set_media_url(self, url, start="0"):
         self.set_media_stop()

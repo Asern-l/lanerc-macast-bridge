@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lanerc Cast">
+  <rect width="64" height="64" rx="15" fill="#123147"/>
+  <path d="M17 19h30v21H17z" fill="none" stroke="#effbff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M24 48h16M32 40v8" fill="none" stroke="#effbff" stroke-width="4" stroke-linecap="round"/>
+  <path d="M21 29a9 9 0 0 1 9 9M21 23a15 15 0 0 1 15 15" fill="none" stroke="#2fb8b2" stroke-width="3" stroke-linecap="round"/>
+</svg>

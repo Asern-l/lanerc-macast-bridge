@@ -1,13 +1,6 @@
 # Macast TV relay renderer with Lanerc HLS compatibility.
 #
-# Macast Metadata
-# <macast.title>Lanerc TV Renderer</macast.title>
-# <macast.renderer>LanercTVRenderer</macast.renderer>
-# <macast.platform>win32</macast.platform>
-# <macast.version>0.2.0</macast.version>
-# <macast.host_version>0.7</macast.host_version>
-# <macast.author>Asern-l</macast.author>
-# <macast.desc>Transcode Lanerc streams and relay them to a DLNA TV.</macast.desc>
+# Internal DLNA TV compatibility backend. Loaded by Lanerc Cast.
 
 import logging
 import os
@@ -125,6 +118,23 @@ class DLNAController:
         finally:
             route_probe.close()
 
+    @classmethod
+    def _candidate_ipv4s(cls):
+        addresses = set()
+        try:
+            addresses.update(address for address, _ in Setting.get_ip())
+        except (AttributeError, OSError, TypeError, ValueError):
+            pass
+        try:
+            addresses.add(cls._active_ipv4())
+        except OSError:
+            pass
+        return sorted(
+            address
+            for address in addresses
+            if address and not address.startswith(("127.", "169.254."))
+        )
+
     def _cache_location(self, location):
         if urlsplit(location).scheme not in ("http", "https"):
             return
@@ -135,18 +145,30 @@ class DLNAController:
             logger.info("SSDP location: %s", location)
 
     def _listen_for_notifications(self):
-        multicast_ip = self._active_ipv4()
+        multicast_ips = self._candidate_ipv4s()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.listener_socket = sock
         try:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(("", 1900))
-            membership = socket.inet_aton(SSDP_ADDRESS[0]) + socket.inet_aton(
-                multicast_ip
-            )
-            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+            joined = []
+            for multicast_ip in multicast_ips:
+                try:
+                    membership = socket.inet_aton(SSDP_ADDRESS[0]) + socket.inet_aton(
+                        multicast_ip
+                    )
+                    sock.setsockopt(
+                        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership
+                    )
+                    joined.append(multicast_ip)
+                except OSError:
+                    logger.debug(
+                        "Cannot join SSDP multicast on %s", multicast_ip, exc_info=True
+                    )
+            if not joined:
+                raise OSError("No usable IPv4 interface for SSDP notifications")
             sock.settimeout(0.5)
-            logger.info("Listening for SSDP notifications on %s:1900", multicast_ip)
+            logger.info("Listening for SSDP notifications on %s", ", ".join(joined))
             while self.listener_running:
                 try:
                     data, _ = sock.recvfrom(65535)
@@ -188,24 +210,24 @@ class DLNAController:
             and (not preferred_ip or urlsplit(preferred_location).hostname == preferred_ip)
         ):
             locations.add(preferred_location)
-        multicast_ip = self._active_ipv4()
+        multicast_ips = self._candidate_ipv4s()
         logger.info(
             "Starting SSDP search on %s; cached locations: %s",
-            multicast_ip,
+            ", ".join(multicast_ips) or "no interface",
             len(locations),
         )
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        try:
-            sock.bind((multicast_ip, 0))
-            sock.settimeout(0.4)
-            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-            sock.setsockopt(
-                socket.IPPROTO_IP,
-                socket.IP_MULTICAST_IF,
-                socket.inet_aton(multicast_ip),
-            )
-            deadline = time.time() + max(5, timeout)
-            while time.time() < deadline:
+        per_interface_timeout = max(0.8, float(timeout) / max(1, len(multicast_ips)))
+        for multicast_ip in multicast_ips:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+            try:
+                sock.bind((multicast_ip, 0))
+                sock.settimeout(0.25)
+                sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+                sock.setsockopt(
+                    socket.IPPROTO_IP,
+                    socket.IP_MULTICAST_IF,
+                    socket.inet_aton(multicast_ip),
+                )
                 for search_target in search_targets:
                     request = (
                         "M-SEARCH * HTTP/1.1\r\n"
@@ -215,22 +237,21 @@ class DLNAController:
                         "ST: {}\r\n\r\n"
                     ).format(search_target).encode("ascii")
                     sock.sendto(request, SSDP_ADDRESS)
-                round_deadline = min(deadline, time.time() + 1.2)
-                while time.time() < round_deadline:
+                deadline = time.time() + per_interface_timeout
+                while time.time() < deadline:
                     try:
                         data, _ = sock.recvfrom(65535)
                     except socket.timeout:
-                        break
+                        continue
                     headers = self._parse_ssdp_headers(data)
                     location = headers.get("location", "")
                     if urlsplit(location).scheme in ("http", "https"):
                         locations.add(location)
                         self._cache_location(location)
-                if locations:
-                    break
-                time.sleep(0.15)
-        finally:
-            sock.close()
+            except OSError:
+                logger.debug("SSDP search failed on %s", multicast_ip, exc_info=True)
+            finally:
+                sock.close()
 
         devices = []
         for location in locations:
@@ -575,8 +596,8 @@ class LanercTVRenderer(Renderer):
         if ffmpeg_path is None:
             self.set_state_transport_error()
             self._notify(
-                "FFmpeg not found",
-                "Install FFmpeg or set LanercFFmpegPath in macast_setting.json.",
+                "FFmpeg 未就绪",
+                "电视播放需要 FFmpeg，请重新运行安装程序或配置 FFmpeg 路径。",
             )
             return
 
@@ -590,10 +611,10 @@ class LanercTVRenderer(Renderer):
         )
         if not devices:
             self.set_state_transport_error()
-            message = "No DLNA TV found on the local network."
+            message = "未在局域网中发现可用的 DLNA 电视。"
             if preferred_ip:
-                message = "No DLNA TV found at {}.".format(preferred_ip)
-            self._notify("TV not found", message)
+                message = "无法连接已选择的电视（{}）。".format(preferred_ip)
+            self._notify("未找到电视", message)
             return
 
         self.device = devices[0]
@@ -628,11 +649,11 @@ class LanercTVRenderer(Renderer):
         except Exception as exc:
             logger.exception("Cannot start playback on TV")
             self.set_state_transport_error()
-            self._notify("TV playback error", str(exc))
+            self._notify("电视播放失败", str(exc))
             return
 
         self.set_state_play()
-        self._notify("Casting to TV", self.device.name)
+        self._notify("正在电视播放", self.device.name)
 
     def set_media_url(self, url, start="0"):
         self.set_media_stop()

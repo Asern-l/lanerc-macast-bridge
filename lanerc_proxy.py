@@ -1,13 +1,6 @@
 # Macast renderer for HLS segments disguised with a JPEG prefix.
 #
-# Macast Metadata
-# <macast.title>Lanerc MPV Renderer</macast.title>
-# <macast.renderer>LanercHLSRenderer</macast.renderer>
-# <macast.platform>win32</macast.platform>
-# <macast.version>0.1.0</macast.version>
-# <macast.host_version>0.7</macast.host_version>
-# <macast.author>Asern-l</macast.author>
-# <macast.desc>Play Lanerc HLS streams with Macast's bundled mpv.</macast.desc>
+# Internal MPV compatibility backend. Loaded by Lanerc Cast.
 
 import hashlib
 import logging

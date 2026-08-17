@@ -1,13 +1,13 @@
 # Unified local-player and TV-relay renderer for Macast.
 #
 # Macast Metadata
-# <macast.title>Lanerc Cast Pro</macast.title>
+# <macast.title>Lanerc Cast</macast.title>
 # <macast.renderer>LanercProRenderer</macast.renderer>
 # <macast.platform>win32</macast.platform>
-# <macast.version>1.2.0</macast.version>
+# <macast.version>2.0.0</macast.version>
 # <macast.host_version>0.7</macast.host_version>
 # <macast.author>Asern-l</macast.author>
-# <macast.desc>Local playback and selectable DLNA TV relay in one renderer.</macast.desc>
+# <macast.desc>Reliable local playback and optional DLNA TV compatibility relay.</macast.desc>
 
 import json
 import logging
@@ -17,12 +17,14 @@ import time
 import webbrowser
 from enum import Enum
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 import cherrypy
 
 from macast import Setting
 from macast.gui import MenuItem
 from macast.renderer import Renderer, RendererSetting
+from macast.utils import SETTING_DIR
 from renderer.lanerc_potplayer import LanercPotPlayerRenderer, _find_potplayer
 from renderer.lanerc_proxy import LanercHLSRenderer
 from renderer.lanerc_tv import DLNAController, LanercTVRenderer, TVSetting, _find_ffmpeg
@@ -30,6 +32,20 @@ from renderer.lanerc_tv import DLNAController, LanercTVRenderer, TVSetting, _fin
 
 logger = logging.getLogger("LanercProRenderer")
 logger.setLevel(logging.INFO)
+if not any(isinstance(handler, logging.FileHandler) for handler in logger.handlers):
+    file_handler = logging.FileHandler(
+        os.path.join(SETTING_DIR, "lanerc_cast.log"), encoding="utf-8"
+    )
+    file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(file_handler)
+
+APP_NAME = "Lanerc Cast"
+APP_VERSION = "2.0.0"
+ASSET_TYPES = {
+    ".css": "text/css; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".svg": "image/svg+xml; charset=utf-8",
+}
 
 
 class ProSetting(Enum):
@@ -43,7 +59,7 @@ class ProSetting(Enum):
 
 class _ControlHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
-    server_version = "LanercCastPro/1.2"
+    server_version = "LanercCast/2.0"
 
     def _json(self, data, status=200):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -54,48 +70,71 @@ class _ControlHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _error(self, status, code, message):
+        self._json({"ok": False, "error": {"code": code, "message": message}}, status)
+
+    def _serve_file(self, path, content_type):
+        try:
+            with open(path, "rb") as handle:
+                payload = handle.read()
+        except OSError:
+            self._error(404, "asset_not_found", "请求的资源不存在")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(payload)
+
     def do_GET(self):
-        if self.path == "/":
-            path = os.path.join(os.path.dirname(__file__), "lanerc_pro.html")
-            try:
-                with open(path, "rb") as handle:
-                    payload = handle.read()
-            except OSError:
-                self.send_error(500, "Control panel is missing")
+        request_path = urlsplit(self.path).path
+        if request_path == "/":
+            page_path = os.path.join(os.path.dirname(__file__), "lanerc_pro.html")
+            self._serve_file(page_path, "text/html; charset=utf-8")
+            return
+        if request_path.startswith("/assets/"):
+            name = os.path.basename(request_path)
+            extension = os.path.splitext(name)[1].lower()
+            if extension not in ASSET_TYPES or name != request_path.rsplit("/", 1)[-1]:
+                self._error(404, "asset_not_found", "请求的资源不存在")
                 return
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(payload)))
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(payload)
+            asset_path = os.path.join(os.path.dirname(__file__), "lanerc_assets", name)
+            self._serve_file(asset_path, ASSET_TYPES[extension])
             return
-        if self.path == "/api/status":
-            self._json(self.server.renderer.status())
+        if request_path == "/api/status":
+            self._json({"ok": True, "data": self.server.renderer.status()})
             return
-        if self.path == "/api/devices":
+        if request_path == "/api/devices":
             try:
-                self._json(self.server.renderer.discover_devices())
-            except Exception as exc:
+                self._json({"ok": True, "data": self.server.renderer.discover_devices()})
+            except Exception:
                 logger.exception("TV discovery from control panel failed")
-                self._json({"error": str(exc)}, status=500)
+                self._error(500, "discovery_failed", "无法扫描局域网中的电视")
             return
-        self.send_error(404)
+        self._error(404, "not_found", "接口不存在")
 
     def do_POST(self):
-        if self.path != "/api/settings":
-            self.send_error(404)
+        if urlsplit(self.path).path != "/api/settings":
+            self._error(404, "not_found", "接口不存在")
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > 64 * 1024:
+                raise ValueError("请求内容无效")
             data = json.loads(self.rfile.read(length).decode("utf-8"))
             self.server.renderer.update_settings(data)
-            self._json(self.server.renderer.status())
+            self._json({
+                "ok": True,
+                "data": self.server.renderer.status(),
+                "message": "设置已保存，将用于下一次播放",
+            })
         except (ValueError, TypeError) as exc:
-            self._json({"error": str(exc)}, status=400)
-        except Exception as exc:
-            logger.exception("Cannot update Pro settings")
-            self._json({"error": str(exc)}, status=500)
+            self._error(400, "invalid_settings", str(exc))
+        except Exception:
+            logger.exception("Cannot update settings")
+            self._error(500, "settings_failed", "保存设置失败")
 
     def log_message(self, fmt, *args):
         logger.debug(fmt, *args)
@@ -112,8 +151,8 @@ class ProRendererSetting(RendererSetting):
 
     def build_menu(self):
         return [
-            MenuItem("Lanerc Cast Pro", enabled=False),
-            MenuItem("Open Control Panel", lambda _: self.renderer.open_control_panel()),
+            MenuItem("Lanerc Cast", enabled=False),
+            MenuItem("打开控制中心", lambda _: self.renderer.open_control_panel()),
         ]
 
 
@@ -127,6 +166,8 @@ class LanercProRenderer(Renderer):
         self.backend_lock = threading.RLock()
         self.devices_lock = threading.Lock()
         self.devices = []
+        self.last_discovery_at = None
+        self.last_discovery_error = ""
         self.title = "Lanerc"
         self.media_generation = 0
         self.control_server = None
@@ -160,7 +201,7 @@ class LanercProRenderer(Renderer):
             return 2.0
 
     def _auto_sync(self):
-        return bool(Setting.get(ProSetting.LanercAutoSync, True))
+        return bool(Setting.get(ProSetting.LanercAutoSync, False))
 
     def _new_backend(self, key):
         if key == "tv":
@@ -227,37 +268,64 @@ class LanercProRenderer(Renderer):
         selected_ip = str(Setting.get(TVSetting.LanercTVIP, "") or "")
         with self.devices_lock:
             devices = [dict(item) for item in self.devices]
+        selected_device = next(
+            (item for item in devices if item["host"] == selected_ip), None
+        )
+        potplayer_path = _find_potplayer()
+        ffmpeg_path = _find_ffmpeg()
+        warnings = []
+        if self._mode() == "tv" and not ffmpeg_path:
+            warnings.append("电视播放需要 FFmpeg，请重新运行安装程序或配置路径。")
+        if self._tv_audio() == "computer":
+            warnings.append("电脑声音输出属于实验性功能，不同电视的缓冲时间可能导致音画偏差。")
         return {
+            "app": {"name": APP_NAME, "version": APP_VERSION},
+            "service": {
+                "state": "ready" if self.running else "starting",
+                "control_port": self.control_port,
+                "active_backend": self.backend_key or None,
+            },
             "mode": self._mode(),
             "player": self._player(),
             "selected_tv": selected_ip,
+            "selected_tv_name": selected_device["name"] if selected_device else "",
             "tv_audio": self._tv_audio(),
             "audio_delay": self._audio_delay(),
             "auto_sync": self._auto_sync(),
             "devices": devices,
             "availability": {
-                "potplayer": bool(_find_potplayer()),
-                "ffmpeg": bool(_find_ffmpeg()),
+                "potplayer": bool(potplayer_path),
+                "potplayer_path": potplayer_path or "",
+                "ffmpeg": bool(ffmpeg_path),
+                "ffmpeg_path": ffmpeg_path or "",
             },
-            "control_port": self.control_port,
+            "discovery": {
+                "last_scan": self.last_discovery_at,
+                "error": self.last_discovery_error,
+            },
+            "warnings": warnings,
         }
 
     def discover_devices(self):
-        preferred_ip = str(Setting.get(TVSetting.LanercTVIP, "") or "").strip()
         preferred_location = str(
             Setting.get(TVSetting.LanercTVLocation, "") or ""
         ).strip()
-        devices = self.controller.discover(
-            preferred_ip=preferred_ip,
-            preferred_location=preferred_location,
-            timeout=2,
-        )
+        try:
+            devices = self.controller.discover(
+                preferred_location=preferred_location,
+                timeout=2,
+            )
+            self.last_discovery_error = ""
+        except Exception as exc:
+            self.last_discovery_error = str(exc)
+            raise
         result = [
             {"name": device.name, "host": device.host, "location": device.location}
             for device in devices
         ]
         with self.devices_lock:
             self.devices = result
+        self.last_discovery_at = time.strftime("%Y-%m-%dT%H:%M:%S")
         status = self.status()
         status["devices"] = result
         return status
@@ -269,19 +337,19 @@ class LanercProRenderer(Renderer):
         try:
             audio_delay = min(8.0, max(0.0, float(data.get("audio_delay", self._audio_delay()))))
         except (TypeError, ValueError):
-            raise ValueError("Invalid audio delay")
+            raise ValueError("声音延迟无效")
         auto_sync = bool(data.get("auto_sync", self._auto_sync()))
         selected_tv = str(data.get("selected_tv", "") or "").strip()
         if mode not in ("local", "tv"):
-            raise ValueError("Invalid output mode")
+            raise ValueError("输出方式无效")
         if player not in ("potplayer", "mpv"):
-            raise ValueError("Invalid local player")
+            raise ValueError("本机播放器无效")
         if tv_audio not in ("tv", "computer"):
-            raise ValueError("Invalid TV audio output")
+            raise ValueError("声音输出方式无效")
         if tv_audio == "computer" and not _find_potplayer():
-            raise ValueError("PotPlayer is required for computer audio")
+            raise ValueError("电脑输出声音需要安装 PotPlayer")
         if mode == "tv" and not selected_tv:
-            raise ValueError("Select a TV before enabling relay")
+            raise ValueError("启用电视播放前，请先选择电视")
 
         old_signature = (self._desired_backend(), self._tv_audio())
         Setting.set(ProSetting.LanercOutputMode, mode)
@@ -309,8 +377,8 @@ class LanercProRenderer(Renderer):
             self.set_state_stop()
         cherrypy.engine.publish(
             "app_notify",
-            "Lanerc Cast Pro",
-            "TV relay enabled" if mode == "tv" else "Local playback enabled",
+            APP_NAME,
+            "已切换到电视播放" if mode == "tv" else "已切换到本机播放",
         )
 
     def start(self):
