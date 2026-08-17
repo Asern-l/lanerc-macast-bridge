@@ -363,6 +363,8 @@ class FFmpegTVRelay:
         self.stream_path = "/stream/{}.ts".format(uuid.uuid4().hex)
         self.source_url = ""
         self.ffmpeg_path = ""
+        self.include_audio = True
+        self.stream_started = threading.Event()
         self.process = None
         self.process_lock = threading.Lock()
         self.thread = threading.Thread(
@@ -374,6 +376,7 @@ class FFmpegTVRelay:
 
     def prepare(self, source_url, ffmpeg_path):
         self.stop_process()
+        self.stream_started.clear()
         self.source_url = source_url
         self.ffmpeg_path = ffmpeg_path
         self.stream_path = "/stream/{}.ts".format(uuid.uuid4().hex)
@@ -385,7 +388,7 @@ class FFmpegTVRelay:
         )
 
     def _command(self):
-        return [
+        command = [
             self.ffmpeg_path,
             "-hide_banner",
             "-loglevel",
@@ -396,12 +399,11 @@ class FFmpegTVRelay:
             "10000000",
             "-probesize",
             "10000000",
+            "-re",
             "-i",
             self.source_url,
             "-map",
             "0:v:0?",
-            "-map",
-            "0:a:0?",
             "-c:v",
             "libx264",
             "-preset",
@@ -416,14 +418,6 @@ class FFmpegTVRelay:
             "yuv420p",
             "-vf",
             "scale=w='min(1920,iw)':h=-2",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "160k",
-            "-ac",
-            "2",
-            "-ar",
-            "48000",
             "-muxdelay",
             "0",
             "-muxpreload",
@@ -432,6 +426,12 @@ class FFmpegTVRelay:
             "mpegts",
             "pipe:1",
         ]
+        if getattr(self, "include_audio", True):
+            command[command.index("-c:v"):command.index("-c:v")] = [
+                "-map", "0:a:0?", "-c:a", "aac", "-b:a", "160k",
+                "-ac", "2", "-ar", "48000",
+            ]
+        return command
 
     def stream(self, handler):
         with self.process_lock:
@@ -455,6 +455,7 @@ class FFmpegTVRelay:
             handler.client_address[0],
             process.pid,
         )
+        self.stream_started.set()
 
         def log_stderr():
             for raw_line in iter(process.stderr.readline, b""):
@@ -526,11 +527,12 @@ def _didl_metadata(title, media_url):
 
 
 class LanercTVRenderer(Renderer):
-    def __init__(self, controller=None):
+    def __init__(self, controller=None, include_audio=True):
         super(LanercTVRenderer, self).__init__()
         self.hls_bridge = _HLSBridge()
         self.controller = controller or DLNAController()
         self.owns_controller = controller is None
+        self.include_audio = include_audio
         self.relay = FFmpegTVRelay(
             int(Setting.get(TVSetting.LanercRelayPort, 0) or 0)
         )
@@ -569,6 +571,7 @@ class LanercTVRenderer(Renderer):
             and urlsplit(source).path.lower().endswith(".m3u8")
         ):
             source = self.hls_bridge.local_url(source, "playlist")
+        self.relay.include_audio = self.include_audio
         self.relay.prepare(source, ffmpeg_path)
         media_url = self.relay.url_for(self.device)
         logger.info(
@@ -601,6 +604,7 @@ class LanercTVRenderer(Renderer):
 
     def set_media_url(self, url, start="0"):
         self.set_media_stop()
+        self.relay.stream_started.clear()
         self.source_url = url
         logger.info("Received media URL from DLNA controller: %s", url)
         self.set_state_transport("TRANSITIONING")
@@ -610,6 +614,9 @@ class LanercTVRenderer(Renderer):
             daemon=True,
         )
         self.worker.start()
+
+    def wait_until_streaming(self, timeout=10):
+        return self.relay.stream_started.wait(timeout)
 
     def set_media_title(self, title):
         self.title = title or "Lanerc"

@@ -19,6 +19,8 @@ with sync_playwright() as p:
     page.wait_for_timeout(1200)
     assert page.locator("#tv-panel").is_visible()
     assert page.locator("#devices").inner_text()
+    page.locator("#tv-audio").select_option("computer")
+    assert page.locator("#tv-audio").input_value() == "computer"
     page.screenshot(path=str(TV_OUT), full_page=True)
     page.set_viewport_size({"width": 390, "height": 844})
     page.reload(wait_until="networkidle")

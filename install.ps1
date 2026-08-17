@@ -55,6 +55,9 @@ if (Test-Path $settingsPath) {
     $settings | Add-Member -NotePropertyName Macast_Renderer -NotePropertyValue $selectedRenderer -Force
     $settings | Add-Member -NotePropertyName LanercOutputMode -NotePropertyValue 'local' -Force
     $settings | Add-Member -NotePropertyName LanercLocalPlayer -NotePropertyValue $(if ($potPlayer) { 'potplayer' } else { 'mpv' }) -Force
+    if (-not $settings.PSObject.Properties['LanercTVAudio']) {
+        $settings | Add-Member -NotePropertyName LanercTVAudio -NotePropertyValue 'tv'
+    }
     if (-not $settings.PSObject.Properties['LanercControlPort']) {
         $settings | Add-Member -NotePropertyName LanercControlPort -NotePropertyValue 4380
     }

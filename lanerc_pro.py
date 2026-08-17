@@ -4,7 +4,7 @@
 # <macast.title>Lanerc Cast Pro</macast.title>
 # <macast.renderer>LanercProRenderer</macast.renderer>
 # <macast.platform>win32</macast.platform>
-# <macast.version>1.0.0</macast.version>
+# <macast.version>1.1.0</macast.version>
 # <macast.host_version>0.7</macast.host_version>
 # <macast.author>Asern-l</macast.author>
 # <macast.desc>Local playback and selectable DLNA TV relay in one renderer.</macast.desc>
@@ -35,11 +35,12 @@ class ProSetting(Enum):
     LanercOutputMode = 9101
     LanercLocalPlayer = 9102
     LanercControlPort = 9103
+    LanercTVAudio = 9104
 
 
 class _ControlHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
-    server_version = "LanercCastPro/1.0"
+    server_version = "LanercCastPro/1.1"
 
     def _json(self, data, status=200):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -119,10 +120,12 @@ class LanercProRenderer(Renderer):
         self.controller = DLNAController()
         self.backend = None
         self.backend_key = ""
+        self.audio_backend = None
         self.backend_lock = threading.RLock()
         self.devices_lock = threading.Lock()
         self.devices = []
         self.title = "Lanerc"
+        self.media_generation = 0
         self.control_server = None
         self.control_thread = None
         self.control_port = 0
@@ -143,9 +146,16 @@ class LanercProRenderer(Renderer):
     def _desired_backend(self):
         return "tv" if self._mode() == "tv" else self._player()
 
+    def _tv_audio(self):
+        output = str(Setting.get(ProSetting.LanercTVAudio, "tv") or "tv")
+        return output if output in ("tv", "computer") else "tv"
+
     def _new_backend(self, key):
         if key == "tv":
-            return LanercTVRenderer(controller=self.controller)
+            return LanercTVRenderer(
+                controller=self.controller,
+                include_audio=self._tv_audio() == "tv",
+            )
         if key == "potplayer":
             return LanercPotPlayerRenderer()
         return LanercHLSRenderer()
@@ -164,6 +174,22 @@ class LanercProRenderer(Renderer):
                 self.backend.set_media_title(self.title)
             logger.info("Pro output backend changed to %s", key)
             return self.backend
+
+    def _ensure_audio_backend(self):
+        needs_computer_audio = self._mode() == "tv" and self._tv_audio() == "computer"
+        with self.backend_lock:
+            if not needs_computer_audio:
+                if self.audio_backend is not None:
+                    self.audio_backend.stop()
+                    self.audio_backend = None
+                return None
+            if self.audio_backend is None:
+                self.audio_backend = LanercPotPlayerRenderer(hidden=True)
+                self.audio_backend.start()
+                if self.title:
+                    self.audio_backend.set_media_title(self.title)
+                logger.info("Computer audio output enabled through PotPlayer")
+            return self.audio_backend
 
     def _start_control_server(self):
         configured_port = int(Setting.get(ProSetting.LanercControlPort, 4380) or 4380)
@@ -193,6 +219,7 @@ class LanercProRenderer(Renderer):
             "mode": self._mode(),
             "player": self._player(),
             "selected_tv": selected_ip,
+            "tv_audio": self._tv_audio(),
             "devices": devices,
             "availability": {
                 "potplayer": bool(_find_potplayer()),
@@ -216,24 +243,34 @@ class LanercProRenderer(Renderer):
     def update_settings(self, data):
         mode = data.get("mode", self._mode())
         player = data.get("player", self._player())
+        tv_audio = data.get("tv_audio", self._tv_audio())
         selected_tv = str(data.get("selected_tv", "") or "").strip()
         if mode not in ("local", "tv"):
             raise ValueError("Invalid output mode")
         if player not in ("potplayer", "mpv"):
             raise ValueError("Invalid local player")
+        if tv_audio not in ("tv", "computer"):
+            raise ValueError("Invalid TV audio output")
+        if tv_audio == "computer" and not _find_potplayer():
+            raise ValueError("PotPlayer is required for computer audio")
         if mode == "tv" and not selected_tv:
             raise ValueError("Select a TV before enabling relay")
 
-        old_key = self._desired_backend()
+        old_signature = (self._desired_backend(), self._tv_audio())
         Setting.set(ProSetting.LanercOutputMode, mode)
         Setting.set(ProSetting.LanercLocalPlayer, player)
+        Setting.set(ProSetting.LanercTVAudio, tv_audio)
         Setting.set(TVSetting.LanercTVIP, selected_tv)
-        if old_key != self._desired_backend():
+        if old_signature != (self._desired_backend(), self._tv_audio()):
             with self.backend_lock:
+                self.media_generation += 1
                 if self.backend is not None:
                     self.backend.stop()
                     self.backend = None
                     self.backend_key = ""
+                if self.audio_backend is not None:
+                    self.audio_backend.stop()
+                    self.audio_backend = None
             self.set_state_stop()
         cherrypy.engine.publish(
             "app_notify",
@@ -251,44 +288,85 @@ class LanercProRenderer(Renderer):
         ).start()
 
     def set_media_url(self, url, start="0"):
-        self._ensure_backend().set_media_url(url, start)
+        backend = self._ensure_backend()
+        backend.set_media_url(url, start)
+        audio_backend = self._ensure_audio_backend()
+        if audio_backend is not None:
+            with self.backend_lock:
+                self.media_generation += 1
+                generation = self.media_generation
+            threading.Thread(
+                target=self._start_computer_audio,
+                args=(generation, backend, audio_backend, url, start),
+                name="LANERC_PRO_SPLIT_AUDIO",
+                daemon=True,
+            ).start()
+
+    def _start_computer_audio(self, generation, backend, audio_backend, url, start):
+        if not backend.wait_until_streaming(timeout=10):
+            logger.warning("TV did not request video; computer audio was not started")
+            return
+        with self.backend_lock:
+            if (
+                generation != self.media_generation
+                or audio_backend is not self.audio_backend
+                or self._mode() != "tv"
+                or self._tv_audio() != "computer"
+            ):
+                return
+        audio_backend.set_media_url(url, start)
 
     def set_media_title(self, title):
         self.title = title or "Lanerc"
         with self.backend_lock:
             if self.backend is not None:
                 self.backend.set_media_title(self.title)
+            if self.audio_backend is not None:
+                self.audio_backend.set_media_title(self.title)
 
     def set_media_stop(self):
         with self.backend_lock:
+            self.media_generation += 1
             if self.backend is not None:
                 self.backend.set_media_stop()
+            if self.audio_backend is not None:
+                self.audio_backend.set_media_stop()
         self.set_state_stop()
 
     def set_media_pause(self):
         with self.backend_lock:
             if self.backend is not None:
                 self.backend.set_media_pause()
+            if self.audio_backend is not None:
+                self.audio_backend.set_media_pause()
 
     def set_media_resume(self):
         with self.backend_lock:
             if self.backend is not None:
                 self.backend.set_media_resume()
+            if self.audio_backend is not None:
+                self.audio_backend.set_media_resume()
 
     def set_media_position(self, data):
         with self.backend_lock:
             if self.backend is not None:
                 self.backend.set_media_position(data)
+            if self.audio_backend is not None:
+                self.audio_backend.set_media_position(data)
 
     def set_media_volume(self, data):
         with self.backend_lock:
             if self.backend is not None:
                 self.backend.set_media_volume(data)
+            if self.audio_backend is not None:
+                self.audio_backend.set_media_volume(data)
 
     def set_media_mute(self, data):
         with self.backend_lock:
             if self.backend is not None:
                 self.backend.set_media_mute(data)
+            if self.audio_backend is not None:
+                self.audio_backend.set_media_mute(data)
 
     def stop(self):
         try:
@@ -296,6 +374,9 @@ class LanercProRenderer(Renderer):
                 if self.backend is not None:
                     self.backend.stop()
                     self.backend = None
+                if self.audio_backend is not None:
+                    self.audio_backend.stop()
+                    self.audio_backend = None
             if self.control_server is not None:
                 self.control_server.shutdown()
                 self.control_server.server_close()

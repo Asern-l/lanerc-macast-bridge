@@ -159,7 +159,20 @@ class FFmpegCommandTests(unittest.TestCase):
 
         self.assertIn("libx264", command)
         self.assertIn("aac", command)
+        self.assertIn("-re", command)
         self.assertEqual(command[-2:], ["mpegts", "pipe:1"])
+
+    def test_video_only_relay_omits_audio_mapping(self):
+        relay = tv.FFmpegTVRelay.__new__(tv.FFmpegTVRelay)
+        relay.ffmpeg_path = "ffmpeg.exe"
+        relay.source_url = "http://127.0.0.1/input.m3u8"
+        relay.include_audio = False
+
+        command = relay._command()
+
+        self.assertNotIn("0:a:0?", command)
+        self.assertNotIn("-c:a", command)
+        self.assertIn("0:v:0?", command)
 
 
 if __name__ == "__main__":

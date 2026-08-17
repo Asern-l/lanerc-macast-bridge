@@ -63,6 +63,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 - 将电视中转作为独立输出方式启用或关闭；
 - 实时刷新同一局域网中的 DLNA 电视；
 - 选择并保存目标电视。
+- 可将视频单独送往电视，声音通过电脑默认音频设备（包括蓝牙耳机）播放。
 
 Macast 的 DLNA 广播名称保持标准设备名称，不会随输出方式变化。切换输出方式对下一次
 播放生效，正在播放的媒体会先停止。
@@ -115,6 +116,7 @@ Lanerc --DLNA--> Macast --local HLS bridge--> PotPlayer / mpv
 
 - PotPlayer 渲染器支持播放和停止；DLNA 暂停、音量同步等控制受 PotPlayer 接口限制。
 - 电视中转依赖电视实现标准 UPnP AVTransport，并会产生数秒延迟。
+- 音视频分离会同时建立电视视频流和电脑音频播放，网络与 CPU 占用略高。
 - 1080p 软件转码会占用较多 CPU；当前默认使用兼容性最高的 `libx264`。
 - 本项目针对 Macast v0.7 和当前观察到的 Lanerc HLS 分片格式。
 

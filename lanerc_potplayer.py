@@ -52,10 +52,11 @@ def _find_potplayer():
 
 
 class LanercPotPlayerRenderer(Renderer):
-    def __init__(self):
+    def __init__(self, hidden=False):
         super(LanercPotPlayerRenderer, self).__init__()
         self.hls_bridge = _HLSBridge()
         self.player_path = _find_potplayer()
+        self.hidden = hidden
         self.proc = None
         self.position = 0
         self.playing = False
@@ -86,8 +87,11 @@ class LanercPotPlayerRenderer(Renderer):
             self.set_state_transport_error()
             return
         try:
+            command = [self.player_path, url, "/autoplay", "/new"]
+            if self.hidden:
+                command.append("/minimized")
             proc = subprocess.Popen(
-                [self.player_path, url, "/autoplay", "/new"],
+                command,
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
             self.proc = proc
