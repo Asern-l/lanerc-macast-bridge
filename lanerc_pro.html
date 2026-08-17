@@ -71,6 +71,10 @@
     .availability { margin-top: 10px; color: var(--muted); font-size: 12px; }
     .device-list { display: grid; gap: 8px; }
     .audio-field { margin-top: 18px; }
+    .delay-label { margin-top: 14px; }
+    .delay-slider { width: 100%; }
+    .check-field { display: flex; align-items: center; gap: 9px; margin-top: 16px; color: var(--ink); }
+    .check-field input { width: 18px; height: 18px; accent-color: var(--accent); }
     .device {
       width: 100%; min-height: 66px; padding: 11px 14px; display: grid;
       grid-template-columns: 38px 1fr auto; align-items: center; gap: 12px; text-align: left;
@@ -146,6 +150,13 @@
           <option value="computer">电脑默认音频设备（蓝牙耳机）</option>
         </select>
         <div class="availability">电脑输出时，电视只接收视频，PotPlayer 将最小化播放声音</div>
+        <label class="check-field" for="auto-sync">
+          <input id="auto-sync" type="checkbox" checked>
+          自动同步电视播放位置
+        </label>
+        <label class="delay-label" for="audio-delay">音频延迟 <output id="audio-delay-value">2.0 秒</output></label>
+        <input class="delay-slider" id="audio-delay" type="range" min="0" max="8" step="0.5" value="2">
+        <div class="availability">声音领先画面时增加延迟；声音落后时调低</div>
       </div>
     </section>
     <div class="actions">
@@ -155,7 +166,7 @@
     </div>
   </main>
   <script>
-    const state = { mode: 'local', player: 'potplayer', tv_audio: 'tv', selected_tv: '', devices: [], availability: {} };
+    const state = { mode: 'local', player: 'potplayer', tv_audio: 'tv', auto_sync: true, audio_delay: 2, selected_tv: '', devices: [], availability: {} };
     let saved = {};
     let refreshTimer = null;
     const $ = id => document.getElementById(id);
@@ -173,6 +184,10 @@
       $('tv-panel').classList.toggle('active', state.mode === 'tv');
       $('player').value = state.player;
       $('tv-audio').value = state.tv_audio;
+      $('audio-delay').value = state.audio_delay;
+      $('auto-sync').checked = state.auto_sync;
+      $('audio-delay').disabled = state.auto_sync;
+      $('audio-delay-value').value = `${Number(state.audio_delay).toFixed(1)} 秒`;
       const pot = state.availability.potplayer;
       $('player').options[0].disabled = !pot;
       $('player-availability').textContent = pot ? '已检测到 PotPlayer' : '未检测到 PotPlayer，将使用 Macast MPV';
@@ -198,7 +213,7 @@
       const response = await fetch('/api/status');
       if (!response.ok) throw new Error('无法读取运行状态');
       Object.assign(state, await response.json());
-      saved = { mode: state.mode, player: state.player, tv_audio: state.tv_audio, selected_tv: state.selected_tv };
+      saved = { mode: state.mode, player: state.player, tv_audio: state.tv_audio, auto_sync: state.auto_sync, audio_delay: state.audio_delay, selected_tv: state.selected_tv };
       render();
     }
     async function discover(silent = false) {
@@ -224,11 +239,11 @@
       try {
         const response = await fetch('/api/settings', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: state.mode, player: state.player, tv_audio: state.tv_audio, selected_tv: state.selected_tv })
+          body: JSON.stringify({ mode: state.mode, player: state.player, tv_audio: state.tv_audio, auto_sync: state.auto_sync, audio_delay: state.audio_delay, selected_tv: state.selected_tv })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || '设置保存失败');
-        saved = { mode: state.mode, player: state.player, tv_audio: state.tv_audio, selected_tv: state.selected_tv };
+        saved = { mode: state.mode, player: state.player, tv_audio: state.tv_audio, auto_sync: state.auto_sync, audio_delay: state.audio_delay, selected_tv: state.selected_tv };
         setMessage(state.mode === 'tv' ? '电视中转已启用' : '本机播放已启用');
       } catch (error) {
         setMessage(error.message, true);
@@ -238,6 +253,11 @@
     $('mode-tv').addEventListener('click', () => { state.mode = 'tv'; render(); discover(true); });
     $('player').addEventListener('change', event => { state.player = event.target.value; });
     $('tv-audio').addEventListener('change', event => { state.tv_audio = event.target.value; });
+    $('auto-sync').addEventListener('change', event => { state.auto_sync = event.target.checked; render(); });
+    $('audio-delay').addEventListener('input', event => {
+      state.audio_delay = Number(event.target.value);
+      $('audio-delay-value').value = `${state.audio_delay.toFixed(1)} 秒`;
+    });
     $('refresh').addEventListener('click', () => discover(false));
     $('save').addEventListener('click', save);
     $('reset').addEventListener('click', () => { Object.assign(state, saved); render(); setMessage(''); });

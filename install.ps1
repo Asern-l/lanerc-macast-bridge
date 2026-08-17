@@ -58,11 +58,20 @@ if (Test-Path $settingsPath) {
     if (-not $settings.PSObject.Properties['LanercTVAudio']) {
         $settings | Add-Member -NotePropertyName LanercTVAudio -NotePropertyValue 'tv'
     }
+    if (-not $settings.PSObject.Properties['LanercAudioDelay']) {
+        $settings | Add-Member -NotePropertyName LanercAudioDelay -NotePropertyValue 2.0
+    }
+    if (-not $settings.PSObject.Properties['LanercAutoSync']) {
+        $settings | Add-Member -NotePropertyName LanercAutoSync -NotePropertyValue $true
+    }
     if (-not $settings.PSObject.Properties['LanercControlPort']) {
         $settings | Add-Member -NotePropertyName LanercControlPort -NotePropertyValue 4380
     }
     if (-not $settings.PSObject.Properties['LanercTVIP']) {
         $settings | Add-Member -NotePropertyName LanercTVIP -NotePropertyValue ''
+    }
+    if (-not $settings.PSObject.Properties['LanercTVLocation']) {
+        $settings | Add-Member -NotePropertyName LanercTVLocation -NotePropertyValue ''
     }
     if (-not $settings.PSObject.Properties['LanercFFmpegPath'] -or -not $settings.LanercFFmpegPath) {
         $settings | Add-Member -NotePropertyName LanercFFmpegPath -NotePropertyValue $(if ($ffmpeg) { $ffmpeg } else { '' }) -Force

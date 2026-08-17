@@ -4,7 +4,7 @@
 # <macast.title>Lanerc Cast Pro</macast.title>
 # <macast.renderer>LanercProRenderer</macast.renderer>
 # <macast.platform>win32</macast.platform>
-# <macast.version>1.1.0</macast.version>
+# <macast.version>1.2.0</macast.version>
 # <macast.host_version>0.7</macast.host_version>
 # <macast.author>Asern-l</macast.author>
 # <macast.desc>Local playback and selectable DLNA TV relay in one renderer.</macast.desc>
@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import threading
+import time
 import webbrowser
 from enum import Enum
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -36,11 +37,13 @@ class ProSetting(Enum):
     LanercLocalPlayer = 9102
     LanercControlPort = 9103
     LanercTVAudio = 9104
+    LanercAudioDelay = 9105
+    LanercAutoSync = 9106
 
 
 class _ControlHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
-    server_version = "LanercCastPro/1.1"
+    server_version = "LanercCastPro/1.2"
 
     def _json(self, data, status=200):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -150,6 +153,15 @@ class LanercProRenderer(Renderer):
         output = str(Setting.get(ProSetting.LanercTVAudio, "tv") or "tv")
         return output if output in ("tv", "computer") else "tv"
 
+    def _audio_delay(self):
+        try:
+            return min(8.0, max(0.0, float(Setting.get(ProSetting.LanercAudioDelay, 2.0))))
+        except (TypeError, ValueError):
+            return 2.0
+
+    def _auto_sync(self):
+        return bool(Setting.get(ProSetting.LanercAutoSync, True))
+
     def _new_backend(self, key):
         if key == "tv":
             return LanercTVRenderer(
@@ -220,6 +232,8 @@ class LanercProRenderer(Renderer):
             "player": self._player(),
             "selected_tv": selected_ip,
             "tv_audio": self._tv_audio(),
+            "audio_delay": self._audio_delay(),
+            "auto_sync": self._auto_sync(),
             "devices": devices,
             "availability": {
                 "potplayer": bool(_find_potplayer()),
@@ -229,7 +243,15 @@ class LanercProRenderer(Renderer):
         }
 
     def discover_devices(self):
-        devices = self.controller.discover(timeout=2)
+        preferred_ip = str(Setting.get(TVSetting.LanercTVIP, "") or "").strip()
+        preferred_location = str(
+            Setting.get(TVSetting.LanercTVLocation, "") or ""
+        ).strip()
+        devices = self.controller.discover(
+            preferred_ip=preferred_ip,
+            preferred_location=preferred_location,
+            timeout=2,
+        )
         result = [
             {"name": device.name, "host": device.host, "location": device.location}
             for device in devices
@@ -244,6 +266,11 @@ class LanercProRenderer(Renderer):
         mode = data.get("mode", self._mode())
         player = data.get("player", self._player())
         tv_audio = data.get("tv_audio", self._tv_audio())
+        try:
+            audio_delay = min(8.0, max(0.0, float(data.get("audio_delay", self._audio_delay()))))
+        except (TypeError, ValueError):
+            raise ValueError("Invalid audio delay")
+        auto_sync = bool(data.get("auto_sync", self._auto_sync()))
         selected_tv = str(data.get("selected_tv", "") or "").strip()
         if mode not in ("local", "tv"):
             raise ValueError("Invalid output mode")
@@ -260,7 +287,15 @@ class LanercProRenderer(Renderer):
         Setting.set(ProSetting.LanercOutputMode, mode)
         Setting.set(ProSetting.LanercLocalPlayer, player)
         Setting.set(ProSetting.LanercTVAudio, tv_audio)
+        Setting.set(ProSetting.LanercAudioDelay, audio_delay)
+        Setting.set(ProSetting.LanercAutoSync, auto_sync)
         Setting.set(TVSetting.LanercTVIP, selected_tv)
+        with self.devices_lock:
+            selected_device = next(
+                (item for item in self.devices if item["host"] == selected_tv), None
+            )
+        if selected_device is not None:
+            Setting.set(TVSetting.LanercTVLocation, selected_device["location"])
         if old_signature != (self._desired_backend(), self._tv_audio()):
             with self.backend_lock:
                 self.media_generation += 1
@@ -297,15 +332,45 @@ class LanercProRenderer(Renderer):
                 generation = self.media_generation
             threading.Thread(
                 target=self._start_computer_audio,
-                args=(generation, backend, audio_backend, url, start),
+                args=(
+                    generation,
+                    backend,
+                    audio_backend,
+                    url,
+                    start,
+                    self._audio_delay(),
+                    self._auto_sync(),
+                ),
                 name="LANERC_PRO_SPLIT_AUDIO",
                 daemon=True,
             ).start()
 
-    def _start_computer_audio(self, generation, backend, audio_backend, url, start):
+    def _start_computer_audio(
+        self, generation, backend, audio_backend, url, start, delay, auto_sync
+    ):
         if not backend.wait_until_streaming(timeout=10):
             logger.warning("TV did not request video; computer audio was not started")
             return
+        audio_start = start
+        position = (
+            backend.wait_for_playback_position(timeout=delay)
+            if auto_sync and delay > 0
+            else None
+        )
+        if not auto_sync and delay:
+            deadline = time.monotonic() + delay
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                with self.backend_lock:
+                    if generation != self.media_generation:
+                        return
+                time.sleep(min(0.1, remaining))
+        if position is not None:
+            latest_position = backend.playback_position()
+            audio_start = "{:.3f}".format(latest_position or position)
+            logger.info("Auto-syncing computer audio at TV position %ss", audio_start)
         with self.backend_lock:
             if (
                 generation != self.media_generation
@@ -314,7 +379,7 @@ class LanercProRenderer(Renderer):
                 or self._tv_audio() != "computer"
             ):
                 return
-        audio_backend.set_media_url(url, start)
+        audio_backend.set_media_url(url, audio_start)
 
     def set_media_title(self, title):
         self.title = title or "Lanerc"

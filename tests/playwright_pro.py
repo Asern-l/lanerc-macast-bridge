@@ -21,6 +21,10 @@ with sync_playwright() as p:
     assert page.locator("#devices").inner_text()
     page.locator("#tv-audio").select_option("computer")
     assert page.locator("#tv-audio").input_value() == "computer"
+    assert page.locator("#auto-sync").is_checked()
+    page.locator("#auto-sync").uncheck()
+    page.locator("#audio-delay").fill("2.5")
+    assert page.locator("#audio-delay-value").evaluate("element => element.value") == "2.5 秒"
     page.screenshot(path=str(TV_OUT), full_page=True)
     page.set_viewport_size({"width": 390, "height": 844})
     page.reload(wait_until="networkidle")

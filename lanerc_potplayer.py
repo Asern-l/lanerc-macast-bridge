@@ -77,7 +77,7 @@ class LanercPotPlayerRenderer(Renderer):
                     "%d:%02d:%02d" % (sec // 3600, (sec % 3600) // 60, sec % 60)
                 )
 
-    def _start_player(self, url):
+    def _start_player(self, url, start="0"):
         if not self.player_path:
             cherrypy.engine.publish(
                 "app_notify",
@@ -90,6 +90,8 @@ class LanercPotPlayerRenderer(Renderer):
             command = [self.player_path, url, "/autoplay", "/new"]
             if self.hidden:
                 command.append("/minimized")
+            if str(start) not in ("", "0", "0.0", "00:00:00"):
+                command.append("/seek={}".format(start))
             proc = subprocess.Popen(
                 command,
                 creationflags=subprocess.CREATE_NO_WINDOW,
@@ -115,7 +117,7 @@ class LanercPotPlayerRenderer(Renderer):
         self.playing = True
         threading.Thread(
             target=self._start_player,
-            args=(url,),
+            args=(url, start),
             name="POTPLAYER_START",
             daemon=True,
         ).start()

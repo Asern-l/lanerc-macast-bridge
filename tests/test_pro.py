@@ -15,6 +15,8 @@ class ProPackageTests(unittest.TestCase):
         self.assertIn('id="mode-tv"', panel)
         self.assertIn('id="devices"', panel)
         self.assertIn('id="tv-audio"', panel)
+        self.assertIn('id="audio-delay"', panel)
+        self.assertIn('id="auto-sync"', panel)
         self.assertIn("/api/devices", panel)
         self.assertIn("setInterval", panel)
 

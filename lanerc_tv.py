@@ -59,6 +59,7 @@ class TVSetting(Enum):
     LanercTVIP = 9001
     LanercFFmpegPath = 9002
     LanercRelayPort = 9003
+    LanercTVLocation = 9004
 
 
 def _text(element, child_name, default=""):
@@ -166,11 +167,15 @@ class DLNAController:
             self.listener_socket.close()
         self.listener_thread.join(timeout=2)
 
-    def discover(self, preferred_ip="", timeout=3):
+    def discover(self, preferred_ip="", preferred_location="", timeout=3):
         with self.discover_lock:
-            return self._discover(preferred_ip=preferred_ip, timeout=timeout)
+            return self._discover(
+                preferred_ip=preferred_ip,
+                preferred_location=preferred_location,
+                timeout=timeout,
+            )
 
-    def _discover(self, preferred_ip="", timeout=3):
+    def _discover(self, preferred_ip="", preferred_location="", timeout=3):
         search_targets = (
             "urn:schemas-upnp-org:device:MediaRenderer:1",
             "upnp:rootdevice",
@@ -178,6 +183,11 @@ class DLNAController:
         )
         with self.location_lock:
             locations = set(self.location_cache)
+        if (
+            urlsplit(preferred_location).scheme in ("http", "https")
+            and (not preferred_ip or urlsplit(preferred_location).hostname == preferred_ip)
+        ):
+            locations.add(preferred_location)
         multicast_ip = self._active_ipv4()
         logger.info(
             "Starting SSDP search on %s; cached locations: %s",
@@ -257,7 +267,7 @@ class DLNAController:
                 headers[name.strip().lower()] = value.strip()
         return headers
 
-    def action(self, device, action_name, parameters=None):
+    def action(self, device, action_name, parameters=None, log_response=True):
         parameters = parameters or {}
         body = ElementTree.Element(
             ElementTree.QName(SOAP_NS, "Envelope"),
@@ -280,13 +290,29 @@ class DLNAController:
             },
         )
         response.raise_for_status()
-        logger.info(
-            "TV action %s accepted by %s (%s)",
-            action_name,
-            device.name,
-            response.status_code,
-        )
+        if log_response:
+            logger.info(
+                "TV action %s accepted by %s (%s)",
+                action_name,
+                device.name,
+                response.status_code,
+            )
         return response.content
+
+    def position_seconds(self, device):
+        content = self.action(
+            device,
+            "GetPositionInfo",
+            {"InstanceID": 0},
+            log_response=False,
+        )
+        root = ElementTree.fromstring(content)
+        for element in root.iter():
+            if element.tag.rsplit("}", 1)[-1] == "RelTime":
+                parts = (element.text or "").split(":")
+                if len(parts) == 3:
+                    return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+        return None
 
 
 def _find_ffmpeg():
@@ -555,7 +581,13 @@ class LanercTVRenderer(Renderer):
             return
 
         preferred_ip = str(Setting.get(TVSetting.LanercTVIP, "") or "").strip()
-        devices = self.controller.discover(preferred_ip=preferred_ip)
+        preferred_location = str(
+            Setting.get(TVSetting.LanercTVLocation, "") or ""
+        ).strip()
+        devices = self.controller.discover(
+            preferred_ip=preferred_ip,
+            preferred_location=preferred_location,
+        )
         if not devices:
             self.set_state_transport_error()
             message = "No DLNA TV found on the local network."
@@ -617,6 +649,27 @@ class LanercTVRenderer(Renderer):
 
     def wait_until_streaming(self, timeout=10):
         return self.relay.stream_started.wait(timeout)
+
+    def wait_for_playback_position(self, timeout=8):
+        deadline = time.time() + timeout
+        while time.time() < deadline and self.device is not None:
+            try:
+                position = self.controller.position_seconds(self.device)
+                if position is not None and position > 0:
+                    return position
+            except Exception:
+                logger.debug("Cannot read TV playback position", exc_info=True)
+            time.sleep(0.25)
+        return None
+
+    def playback_position(self):
+        if self.device is None:
+            return None
+        try:
+            return self.controller.position_seconds(self.device)
+        except Exception:
+            logger.debug("Cannot read TV playback position", exc_info=True)
+            return None
 
     def set_media_title(self, title):
         self.title = title or "Lanerc"

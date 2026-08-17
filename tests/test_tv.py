@@ -149,6 +149,15 @@ class SoapTests(unittest.TestCase):
         self.assertIn("video/mp2t", metadata)
         self.assertIn("Title &amp; Episode", metadata)
 
+    def test_reads_tv_playback_position(self):
+        controller = tv.DLNAController.__new__(tv.DLNAController)
+        controller.action = lambda *args, **kwargs: (
+            b'<s:Envelope xmlns:s="urn:test"><s:Body><RelTime>00:01:02.500</RelTime>'
+            b'</s:Body></s:Envelope>'
+        )
+
+        self.assertEqual(controller.position_seconds(object()), 62.5)
+
 
 class FFmpegCommandTests(unittest.TestCase):
     def test_transcodes_to_h264_aac_mpeg_ts(self):
