@@ -84,6 +84,12 @@ class DeviceDescriptionTests(unittest.TestCase):
             "http://192.168.1.20:8000/upnp/control/rendering",
         )
 
+    def test_ssdp_header_parser_is_case_insensitive(self):
+        headers = tv.DLNAController._parse_ssdp_headers(
+            b"HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.20/device.xml\r\n\r\n"
+        )
+        self.assertEqual(headers["location"], "http://192.168.1.20/device.xml")
+
 
 class FakeResponse:
     content = b"ok"

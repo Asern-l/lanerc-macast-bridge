@@ -15,6 +15,7 @@ import shutil
 import socket
 import subprocess
 import threading
+import time
 import uuid
 from collections import namedtuple
 from enum import Enum
@@ -95,28 +96,40 @@ class DLNAController:
         self.session.trust_env = False
 
     def discover(self, preferred_ip="", timeout=3):
-        request = (
-            "M-SEARCH * HTTP/1.1\r\n"
-            "HOST: 239.255.255.250:1900\r\n"
-            'MAN: "ssdp:discover"\r\n'
-            "MX: 2\r\n"
-            "ST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n"
-        ).encode("ascii")
+        search_targets = (
+            "urn:schemas-upnp-org:device:MediaRenderer:1",
+            "upnp:rootdevice",
+            "ssdp:all",
+        )
         locations = set()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         try:
-            sock.settimeout(timeout)
+            sock.settimeout(0.4)
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-            sock.sendto(request, SSDP_ADDRESS)
-            while True:
-                try:
-                    data, _ = sock.recvfrom(65535)
-                except socket.timeout:
+            deadline = time.time() + max(5, timeout)
+            while time.time() < deadline:
+                for search_target in search_targets:
+                    request = (
+                        "M-SEARCH * HTTP/1.1\r\n"
+                        "HOST: 239.255.255.250:1900\r\n"
+                        'MAN: "ssdp:discover"\r\n'
+                        "MX: 1\r\n"
+                        "ST: {}\r\n\r\n"
+                    ).format(search_target).encode("ascii")
+                    sock.sendto(request, SSDP_ADDRESS)
+                round_deadline = min(deadline, time.time() + 1.2)
+                while time.time() < round_deadline:
+                    try:
+                        data, _ = sock.recvfrom(65535)
+                    except socket.timeout:
+                        break
+                    headers = self._parse_ssdp_headers(data)
+                    location = headers.get("location", "")
+                    if urlsplit(location).scheme in ("http", "https"):
+                        locations.add(location)
+                if locations:
                     break
-                headers = self._parse_ssdp_headers(data)
-                location = headers.get("location", "")
-                if urlsplit(location).scheme in ("http", "https"):
-                    locations.add(location)
+                time.sleep(0.15)
         finally:
             sock.close()
 
