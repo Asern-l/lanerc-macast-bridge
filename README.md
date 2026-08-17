@@ -19,19 +19,21 @@ Lanerc Cast 是面向 Windows 的 Macast 兼容扩展，让 Lanerc 的 DLNA 投�
 ## 系统要求
 
 - Windows 10 或 Windows 11；
-- [Macast 0.7](https://github.com/xfangfang/Macast/releases/tag/v0.7)；
-- PotPlayer（可选，本机播放和电脑声音输出推荐）；
-- FFmpeg（仅电视播放需要）。
+- PotPlayer（可选，本机播放和电脑声音输出推荐）。
+
+EXE 已内置 Macast 0.7 运行引擎和 FFmpeg，不需要用户另外安装。首次运行会将内部组件提取到 `%LOCALAPPDATA%\LanercCast`。
 
 ## 安装
 
 ### EXE（推荐）
 
-从 [Releases](https://github.com/Asern-l/lanerc-macast-bridge/releases) 下载 `LanercCast-v2.0.1-win64.exe`，直接双击运行。启动器会自动安装或升级插件、保留现有设置、启动 Macast 并打开控制中心。
+从 [Releases](https://github.com/Asern-l/lanerc-macast-bridge/releases) 下载 `LanercCast-v2.1.0-win64.exe`，直接双击运行。启动器会准备内置运行组件、自动安装或升级插件、保留现有设置、启动 DLNA 引擎并打开控制中心。
 
 该社区构建暂未使用商业代码签名证书，Windows SmartScreen 可能在首次运行时显示提醒。可在 Release 页面核对 SHA-256。
 
 ### PowerShell
+
+源码安装方式仍需自行准备 Macast 0.7；电视播放还需准备 FFmpeg。
 
 1. 从 Macast 托盘菜单完全退出 Macast。
 2. 在 PowerShell 中进入项目目录并运行：

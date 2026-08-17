@@ -4,7 +4,7 @@
 # <macast.title>Lanerc Cast</macast.title>
 # <macast.renderer>LanercProRenderer</macast.renderer>
 # <macast.platform>win32</macast.platform>
-# <macast.version>2.0.1</macast.version>
+# <macast.version>2.1.0</macast.version>
 # <macast.host_version>0.7</macast.host_version>
 # <macast.author>Asern-l</macast.author>
 # <macast.desc>Reliable local playback and optional DLNA TV compatibility relay.</macast.desc>
@@ -40,7 +40,7 @@ if not any(isinstance(handler, logging.FileHandler) for handler in logger.handle
     logger.addHandler(file_handler)
 
 APP_NAME = "Lanerc Cast"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.1.0"
 ASSET_TYPES = {
     ".css": "text/css; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
@@ -59,7 +59,7 @@ class ProSetting(Enum):
 
 class _ControlHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
-    server_version = "LanercCast/2.0.1"
+    server_version = "LanercCast/2.1.0"
 
     def _json(self, data, status=200):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")

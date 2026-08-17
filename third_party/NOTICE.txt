@@ -1,0 +1,21 @@
+Lanerc Cast bundled third-party components
+===========================================
+
+Macast 0.7
+----------
+Project: https://github.com/xfangfang/Macast
+Source:  https://github.com/xfangfang/Macast/tree/v0.7
+License: GNU General Public License version 3
+License file: Macast-GPL-3.0.txt
+
+FFmpeg N-126175-g0056dd32fd-20260816
+-----------------------------------
+Project: https://ffmpeg.org/
+Source commit: https://github.com/FFmpeg/FFmpeg/commit/0056dd32fd
+Windows build scripts: https://github.com/BtbN/FFmpeg-Builds
+License: GNU General Public License version 3 or later
+License file: FFmpeg-GPL-3.0.txt
+
+These components are distributed as separate programs and are invoked by
+Lanerc Cast. Lanerc Cast's own source code remains available under the MIT
+License in the repository root.

@@ -12,6 +12,24 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class LauncherInstallTests(unittest.TestCase):
+    def test_bundled_runtime_is_extracted_to_user_directory(self):
+        with tempfile.TemporaryDirectory() as source_dir, tempfile.TemporaryDirectory() as local_dir:
+            source_root = pathlib.Path(source_dir)
+            for index, source_name in enumerate(launcher.RUNTIME_FILES):
+                path = source_root / source_name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(("runtime-{}".format(index)).encode())
+            with mock.patch.dict(os.environ, {"LOCALAPPDATA": local_dir}), mock.patch.object(
+                launcher, "resource_root", return_value=source_root
+            ):
+                executable = launcher.ensure_bundled_runtime()
+                self.assertTrue(executable.is_file())
+                for source_name, target_name in launcher.RUNTIME_FILES.items():
+                    self.assertEqual(
+                        (source_root / source_name).read_bytes(),
+                        (pathlib.Path(local_dir) / "LanercCast" / target_name).read_bytes(),
+                    )
+
     def test_fresh_install_creates_current_plugin_and_defaults(self):
         with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
             os.environ, {"LOCALAPPDATA": temp_dir}

@@ -17,7 +17,7 @@ from tkinter import filedialog, messagebox, ttk
 
 
 APP_NAME = "Lanerc Cast"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.1.0"
 CONTROL_URL = "http://127.0.0.1:4380/"
 PLUGIN_FILES = (
     "lanerc_proxy.py",
@@ -27,6 +27,13 @@ PLUGIN_FILES = (
     "lanerc_pro.html",
 )
 ASSET_FILES = ("app.css", "app.js", "brand.svg")
+RUNTIME_FILES = {
+    "engine/Macast-Windows-v0.7.exe": "engine/Macast-Windows-v0.7.exe",
+    "engine/ffmpeg.exe": "tools/ffmpeg.exe",
+    "third_party/Macast-GPL-3.0.txt": "licenses/Macast-GPL-3.0.txt",
+    "third_party/FFmpeg-GPL-3.0.txt": "licenses/FFmpeg-GPL-3.0.txt",
+    "third_party/NOTICE.txt": "licenses/NOTICE.txt",
+}
 CREATE_NO_WINDOW = 0x08000000
 DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200
@@ -41,6 +48,13 @@ def config_root():
     if not local:
         raise RuntimeError("无法确定 Windows 用户配置目录。")
     return Path(local) / "xfangfang" / "Macast"
+
+
+def app_data_root():
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        raise RuntimeError("无法确定 Windows 用户配置目录。")
+    return Path(local) / "LanercCast"
 
 
 def log_message(message):
@@ -59,6 +73,39 @@ def file_hash(path):
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def copy_if_changed(source, target):
+    source = Path(source)
+    target = Path(target)
+    if target.is_file():
+        try:
+            if source.stat().st_size == target.stat().st_size and file_hash(source) == file_hash(
+                target
+            ):
+                return False
+        except OSError:
+            pass
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    shutil.copy2(source, temporary)
+    os.replace(temporary, target)
+    return True
+
+
+def ensure_bundled_runtime():
+    source_root = resource_root()
+    target_root = app_data_root()
+    changed = False
+    for source_name, target_name in RUNTIME_FILES.items():
+        source = source_root / source_name
+        if not source.is_file():
+            raise RuntimeError("安装包缺少内部组件：{}".format(source_name))
+        changed = copy_if_changed(source, target_root / target_name) or changed
+    log_message(
+        "Bundled runtime {}".format("installed or updated" if changed else "already current")
+    )
+    return target_root / "engine" / "Macast-Windows-v0.7.exe"
 
 
 def installation_current():
@@ -133,6 +180,7 @@ def find_potplayer():
 def find_ffmpeg():
     local = os.environ.get("LOCALAPPDATA", "")
     candidates = [
+        app_data_root() / "tools" / "ffmpeg.exe",
         Path(r"D:\Macast\tools\ffmpeg\bin\ffmpeg.exe"),
         Path(r"D:\ffmpeg\bin\ffmpeg.exe"),
         Path(r"C:\ffmpeg\bin\ffmpeg.exe"),
@@ -191,7 +239,7 @@ def install_plugin():
 
 
 def find_macast_executable():
-    candidates = []
+    candidates = [app_data_root() / "engine" / "Macast-Windows-v0.7.exe"]
     home = os.environ.get("MACAST_HOME")
     if home:
         candidates.append(Path(home) / "app" / "Macast-Windows-v0.7.exe")
@@ -375,7 +423,12 @@ class LauncherWindow:
                 stop_macast()
             if needs_install:
                 self.set_status("正在安装 Lanerc Cast…", "现有设置将被保留")
+                self.set_status("正在准备内置运行组件…", "首次运行需要提取 DLNA 引擎和 FFmpeg")
+                ensure_bundled_runtime()
                 install_plugin()
+            else:
+                self.set_status("正在检查内置运行组件…")
+                ensure_bundled_runtime()
             executable = find_macast_executable() or self.ask_macast_file()
             if executable is None:
                 self.finish(False, "未找到 Macast 主程序。")

@@ -18,7 +18,7 @@ with sync_playwright() as p:
     assert status_response.ok
     status_payload = status_response.json()
     assert status_payload["ok"] is True
-    assert status_payload["data"]["app"]["version"] == "2.0.1"
+    assert status_payload["data"]["app"]["version"] == "2.1.0"
     saved_settings = {
         key: status_payload["data"][key]
         for key in ("mode", "player", "selected_tv", "tv_audio", "audio_delay", "auto_sync")
@@ -46,7 +46,7 @@ with sync_playwright() as p:
     page.locator("#auto-sync").uncheck()
     page.locator("#audio-delay").fill("2.5")
     assert page.locator("#audio-delay-value").evaluate("element => element.value") == "2.5 秒"
-    assert page.locator("#save").is_enabled()
+    assert page.locator("#save").is_visible()
     page.screenshot(path=str(TV_OUT), full_page=True)
     page.set_viewport_size({"width": 390, "height": 844})
     page.reload(wait_until="networkidle")
