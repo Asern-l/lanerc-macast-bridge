@@ -10,6 +10,8 @@ New-Item -ItemType Directory -Force $rendererDir | Out-Null
 Copy-Item -Force (Join-Path $projectDir 'lanerc_proxy.py') (Join-Path $rendererDir 'lanerc_proxy.py')
 Copy-Item -Force (Join-Path $projectDir 'lanerc_potplayer.py') (Join-Path $rendererDir 'lanerc_potplayer.py')
 Copy-Item -Force (Join-Path $projectDir 'lanerc_tv.py') (Join-Path $rendererDir 'lanerc_tv.py')
+Copy-Item -Force (Join-Path $projectDir 'lanerc_pro.py') (Join-Path $rendererDir 'lanerc_pro.py')
+Copy-Item -Force (Join-Path $projectDir 'lanerc_pro.html') (Join-Path $rendererDir 'lanerc_pro.html')
 
 $potPlayerCandidates = @(
     'D:\PotPlayer\PotPlayerMini64.exe',
@@ -31,7 +33,7 @@ foreach ($registryPath in @('HKCU:\Software\DAUM\PotPlayer64', 'HKCU:\Software\D
 }
 
 $potPlayer = $potPlayerCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-$selectedRenderer = if ($potPlayer) { 'Lanerc PotPlayer Renderer' } else { 'Lanerc MPV Renderer' }
+$selectedRenderer = 'Lanerc Cast Pro'
 $ffmpegCandidates = @(
     'D:\Macast\tools\ffmpeg\bin\ffmpeg.exe',
     'D:\ffmpeg\bin\ffmpeg.exe',
@@ -51,6 +53,11 @@ if (Test-Path $settingsPath) {
 
     $settings = Get-Content -Raw $settingsPath | ConvertFrom-Json
     $settings | Add-Member -NotePropertyName Macast_Renderer -NotePropertyValue $selectedRenderer -Force
+    $settings | Add-Member -NotePropertyName LanercOutputMode -NotePropertyValue 'local' -Force
+    $settings | Add-Member -NotePropertyName LanercLocalPlayer -NotePropertyValue $(if ($potPlayer) { 'potplayer' } else { 'mpv' }) -Force
+    if (-not $settings.PSObject.Properties['LanercControlPort']) {
+        $settings | Add-Member -NotePropertyName LanercControlPort -NotePropertyValue 4380
+    }
     if (-not $settings.PSObject.Properties['LanercTVIP']) {
         $settings | Add-Member -NotePropertyName LanercTVIP -NotePropertyValue ''
     }
@@ -60,12 +67,13 @@ if (Test-Path $settingsPath) {
     if (-not $settings.PSObject.Properties['LanercRelayPort']) {
         $settings | Add-Member -NotePropertyName LanercRelayPort -NotePropertyValue 0
     }
-    $json = $settings | ConvertTo-Json -Depth 10
+    $json = $settings | ConvertTo-Json -Depth 10 -EscapeHandling EscapeNonAscii
     [IO.File]::WriteAllText($settingsPath, $json, [Text.UTF8Encoding]::new($false))
 }
 
 Write-Host "Installed renderers in: $rendererDir"
 Write-Host "Macast renderer selected: $selectedRenderer"
+Write-Host 'Control panel: http://127.0.0.1:4380/'
 if ($ffmpeg) {
     Write-Host "TV relay FFmpeg: $ffmpeg"
 } else {

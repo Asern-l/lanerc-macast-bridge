@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lanerc Cast Pro</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #66727f;
+      --line: #d8dee5;
+      --surface: #ffffff;
+      --canvas: #f4f6f8;
+      --accent: #087e8b;
+      --accent-dark: #05636d;
+      --selected: #e7f4f3;
+      --danger: #a63c32;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+    header {
+      background: #17202a;
+      color: #fff;
+      border-bottom: 4px solid var(--accent);
+    }
+    .header-inner, main { width: min(960px, calc(100% - 32px)); margin: 0 auto; }
+    .header-inner { min-height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand-mark {
+      width: 38px; height: 38px; border: 2px solid #7bd2d8; border-radius: 5px;
+      display: grid; place-items: center; color: #7bd2d8; font-weight: 700; font-size: 15px;
+    }
+    h1 { margin: 0; font-size: 21px; font-weight: 650; }
+    .subtitle { margin-top: 3px; color: #b9c3cc; font-size: 13px; }
+    .status { display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #53c878; }
+    main { padding: 28px 0 44px; }
+    section { padding: 22px 0 26px; border-bottom: 1px solid var(--line); }
+    section:first-child { padding-top: 0; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    h2 { margin: 0; font-size: 15px; font-weight: 650; }
+    .mode-tabs { display: grid; grid-template-columns: 1fr 1fr; width: min(100%, 520px); border: 1px solid #adb7c1; border-radius: 6px; overflow: hidden; }
+    .mode-tabs button { border: 0; border-right: 1px solid #adb7c1; border-radius: 0; background: var(--surface); color: var(--ink); }
+    .mode-tabs button:last-child { border-right: 0; }
+    .mode-tabs button.active { background: var(--accent); color: white; }
+    button {
+      min-height: 40px; padding: 0 16px; border: 1px solid #aeb8c2; border-radius: 6px;
+      background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button:focus-visible, select:focus-visible { outline: 3px solid #9bdde2; outline-offset: 2px; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
+    button.primary:hover { background: var(--accent-dark); }
+    button:disabled { cursor: wait; opacity: .55; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .field { max-width: 520px; }
+    label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
+    select {
+      width: 100%; min-height: 42px; padding: 0 38px 0 12px; border: 1px solid #aeb8c2;
+      border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit;
+    }
+    .availability { margin-top: 10px; color: var(--muted); font-size: 12px; }
+    .device-list { display: grid; gap: 8px; }
+    .device {
+      width: 100%; min-height: 66px; padding: 11px 14px; display: grid;
+      grid-template-columns: 38px 1fr auto; align-items: center; gap: 12px; text-align: left;
+      background: var(--surface); border-color: var(--line);
+    }
+    .device.selected { border-color: var(--accent); background: var(--selected); box-shadow: inset 3px 0 var(--accent); }
+    .tv-icon { width: 31px; height: 22px; border: 2px solid #65717c; border-radius: 3px; position: relative; }
+    .tv-icon:after { content: ""; position: absolute; width: 13px; height: 2px; left: 7px; bottom: -6px; background: #65717c; }
+    .device strong { display: block; font-size: 14px; font-weight: 600; }
+    .device small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .check { color: var(--accent); font-weight: 700; visibility: hidden; }
+    .device.selected .check { visibility: visible; }
+    .empty { padding: 30px 16px; border: 1px dashed #aeb8c2; color: var(--muted); text-align: center; }
+    .actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 22px; }
+    .message { min-height: 20px; margin-right: auto; align-self: center; color: var(--muted); font-size: 13px; }
+    .message.error { color: var(--danger); }
+    .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid #9aa6b1; border-top-color: transparent; border-radius: 50%; animation: spin .75s linear infinite; vertical-align: -2px; margin-right: 7px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 620px) {
+      .header-inner, main { width: min(100% - 22px, 960px); }
+      .header-inner { min-height: 74px; }
+      .status { display: none; }
+      main { padding-top: 20px; }
+      section { padding: 18px 0 22px; }
+      .section-head { align-items: flex-start; }
+      .device { grid-template-columns: 34px minmax(0, 1fr) 18px; }
+      .device strong, .device small { overflow-wrap: anywhere; }
+      .actions { flex-wrap: wrap; }
+      .message { width: 100%; }
+      .actions button { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-mark">LC</div>
+        <div><h1>Lanerc Cast Pro</h1><div class="subtitle">输出控制台</div></div>
+      </div>
+      <div class="status"><span class="dot"></span>Macast 服务在线</div>
+    </div>
+  </header>
+  <main>
+    <section>
+      <div class="section-head"><h2>输出方式</h2></div>
+      <div class="mode-tabs" role="tablist" aria-label="输出方式">
+        <button id="mode-local" role="tab" type="button">本机播放</button>
+        <button id="mode-tv" role="tab" type="button">电视中转</button>
+      </div>
+    </section>
+    <section id="local-panel" class="panel">
+      <div class="section-head"><h2>本机播放器</h2></div>
+      <div class="field">
+        <label for="player">播放器</label>
+        <select id="player">
+          <option value="potplayer">PotPlayer</option>
+          <option value="mpv">Macast MPV</option>
+        </select>
+        <div id="player-availability" class="availability"></div>
+      </div>
+    </section>
+    <section id="tv-panel" class="panel">
+      <div class="section-head">
+        <h2>可用电视</h2>
+        <button id="refresh" type="button">刷新设备</button>
+      </div>
+      <div id="devices" class="device-list" aria-live="polite"></div>
+    </section>
+    <div class="actions">
+      <div id="message" class="message"></div>
+      <button id="reset" type="button">撤销</button>
+      <button id="save" class="primary" type="button">应用设置</button>
+    </div>
+  </main>
+  <script>
+    const state = { mode: 'local', player: 'potplayer', selected_tv: '', devices: [], availability: {} };
+    let saved = {};
+    let refreshTimer = null;
+    const $ = id => document.getElementById(id);
+
+    function setMessage(text, error = false, loading = false) {
+      $('message').className = error ? 'message error' : 'message';
+      $('message').innerHTML = (loading ? '<span class="spinner"></span>' : '') + text;
+    }
+    function render() {
+      $('mode-local').classList.toggle('active', state.mode === 'local');
+      $('mode-tv').classList.toggle('active', state.mode === 'tv');
+      $('mode-local').setAttribute('aria-selected', String(state.mode === 'local'));
+      $('mode-tv').setAttribute('aria-selected', String(state.mode === 'tv'));
+      $('local-panel').classList.toggle('active', state.mode === 'local');
+      $('tv-panel').classList.toggle('active', state.mode === 'tv');
+      $('player').value = state.player;
+      const pot = state.availability.potplayer;
+      $('player').options[0].disabled = !pot;
+      $('player-availability').textContent = pot ? '已检测到 PotPlayer' : '未检测到 PotPlayer，将使用 Macast MPV';
+      const list = $('devices');
+      list.innerHTML = '';
+      if (!state.devices.length) {
+        list.innerHTML = '<div class="empty">未发现可用电视</div>';
+      } else {
+        state.devices.forEach(device => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'device' + (state.selected_tv === device.host ? ' selected' : '');
+          button.innerHTML = '<span class="tv-icon"></span><span><strong></strong><small></small></span><span class="check">OK</span>';
+          button.querySelector('strong').textContent = device.name;
+          button.querySelector('small').textContent = device.host;
+          button.addEventListener('click', () => { state.selected_tv = device.host; render(); });
+          list.appendChild(button);
+        });
+      }
+      $('save').disabled = state.mode === 'tv' && !state.selected_tv;
+    }
+    async function loadStatus() {
+      const response = await fetch('/api/status');
+      if (!response.ok) throw new Error('无法读取运行状态');
+      Object.assign(state, await response.json());
+      saved = { mode: state.mode, player: state.player, selected_tv: state.selected_tv };
+      render();
+    }
+    async function discover(silent = false) {
+      if (!silent) setMessage('正在查找局域网电视', false, true);
+      $('refresh').disabled = true;
+      try {
+        const response = await fetch('/api/devices');
+        if (!response.ok) throw new Error('设备发现失败');
+        const data = await response.json();
+        state.devices = data.devices || [];
+        state.availability = data.availability || state.availability;
+        if (!silent) setMessage(`发现 ${state.devices.length} 台电视`);
+        render();
+      } catch (error) {
+        if (!silent) setMessage(error.message, true);
+      } finally {
+        $('refresh').disabled = false;
+      }
+    }
+    async function save() {
+      setMessage('正在应用设置', false, true);
+      $('save').disabled = true;
+      try {
+        const response = await fetch('/api/settings', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: state.mode, player: state.player, selected_tv: state.selected_tv })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '设置保存失败');
+        saved = { mode: state.mode, player: state.player, selected_tv: state.selected_tv };
+        setMessage(state.mode === 'tv' ? '电视中转已启用' : '本机播放已启用');
+      } catch (error) {
+        setMessage(error.message, true);
+      } finally { render(); }
+    }
+    $('mode-local').addEventListener('click', () => { state.mode = 'local'; render(); });
+    $('mode-tv').addEventListener('click', () => { state.mode = 'tv'; render(); discover(true); });
+    $('player').addEventListener('change', event => { state.player = event.target.value; });
+    $('refresh').addEventListener('click', () => discover(false));
+    $('save').addEventListener('click', save);
+    $('reset').addEventListener('click', () => { Object.assign(state, saved); render(); setMessage(''); });
+    loadStatus().then(() => discover(true)).catch(error => setMessage(error.message, true));
+    refreshTimer = setInterval(() => { if (state.mode === 'tv') discover(true); }, 8000);
+  </script>
+</body>
+</html>

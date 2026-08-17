@@ -37,26 +37,40 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\install.ps1
 ```
 
-重新启动 Macast。安装器会自动选择：
+重新启动 Macast。安装器会选择 `Lanerc Cast Pro`，其默认输出为本机播放：
 
-1. 检测到 PotPlayer 时使用 `Lanerc PotPlayer Renderer`。
-2. 否则使用 `Lanerc MPV Renderer`，即 Macast 自带的 mpv。
+1. 检测到 PotPlayer 时优先使用 PotPlayer。
+2. 否则使用 Macast 自带的 mpv。
 
 所有渲染器都会保留在 Macast 托盘菜单的“选择播放器”中，可以手动切换。
 随后在 Lanerc 中像投电视一样选择 Macast 设备即可。
 
-安装后实际会提供三个渲染器：
+安装后会提供统一的专业版渲染器及三个兼容渲染器：
 
+- `Lanerc Cast Pro`：统一管理本机播放器与独立电视中转功能。
 - `Lanerc PotPlayer Renderer`：在电脑 PotPlayer 播放。
 - `Lanerc MPV Renderer`：在电脑内置 mpv 播放。
 - `Lanerc TV Renderer`：由电脑转码并二次投屏到 DLNA 电视。
 
 安装器会先将原配置备份到 Macast 配置目录下的 `backup` 文件夹。
 
+## 专业版控制台
+
+打开 [http://127.0.0.1:4380/](http://127.0.0.1:4380/)，或从 Macast 托盘菜单选择
+`Open Control Panel`。控制台支持：
+
+- 在 PotPlayer 和 Macast MPV 之间切换本机播放器；
+- 将电视中转作为独立输出方式启用或关闭；
+- 实时刷新同一局域网中的 DLNA 电视；
+- 选择并保存目标电视。
+
+Macast 的 DLNA 广播名称保持标准设备名称，不会随输出方式变化。切换输出方式对下一次
+播放生效，正在播放的媒体会先停止。
+
 ## 电脑中转到电视
 
-先安装 FFmpeg，然后在 Macast 托盘菜单的“选择播放器”中选择
-`Lanerc TV Renderer`。Lanerc 仍然投屏到 Macast，电脑会：
+先安装 FFmpeg，然后在专业版控制台中选择“电视中转”和目标电视。Lanerc 仍然投屏到
+Macast，电脑会：
 
 1. 自动发现同一局域网中的 DLNA 电视；
 2. 修复 Lanerc 的特殊 HLS 分片；

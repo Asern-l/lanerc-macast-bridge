@@ -107,6 +107,7 @@ class DLNAController:
         self.location_lock = threading.Lock()
         self.listener_socket = None
         self.listener_running = True
+        self.discover_lock = threading.Lock()
         self.listener_thread = threading.Thread(
             target=self._listen_for_notifications,
             name="LANERC_TV_SSDP_LISTENER",
@@ -166,6 +167,10 @@ class DLNAController:
         self.listener_thread.join(timeout=2)
 
     def discover(self, preferred_ip="", timeout=3):
+        with self.discover_lock:
+            return self._discover(preferred_ip=preferred_ip, timeout=timeout)
+
+    def _discover(self, preferred_ip="", timeout=3):
         search_targets = (
             "urn:schemas-upnp-org:device:MediaRenderer:1",
             "upnp:rootdevice",
@@ -521,10 +526,11 @@ def _didl_metadata(title, media_url):
 
 
 class LanercTVRenderer(Renderer):
-    def __init__(self):
+    def __init__(self, controller=None):
         super(LanercTVRenderer, self).__init__()
         self.hls_bridge = _HLSBridge()
-        self.controller = DLNAController()
+        self.controller = controller or DLNAController()
+        self.owns_controller = controller is None
         self.relay = FFmpegTVRelay(
             int(Setting.get(TVSetting.LanercRelayPort, 0) or 0)
         )
@@ -641,5 +647,6 @@ class LanercTVRenderer(Renderer):
             super(LanercTVRenderer, self).stop()
         finally:
             self.relay.close()
-            self.controller.close()
+            if self.owns_controller:
+                self.controller.close()
             self.hls_bridge.close()
