@@ -28,11 +28,20 @@ from lxml import etree as ElementTree
 
 from macast import Setting
 from macast.renderer import Renderer
+from macast.utils import SETTING_DIR
 from renderer.lanerc_proxy import _HLSBridge
 
 
 logger = logging.getLogger("LanercTVRenderer")
 logger.setLevel(logging.INFO)
+if not any(isinstance(handler, logging.FileHandler) for handler in logger.handlers):
+    file_handler = logging.FileHandler(
+        os.path.join(SETTING_DIR, "lanerc_tv.log"), encoding="utf-8"
+    )
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    )
+    logger.addHandler(file_handler)
 
 SSDP_ADDRESS = ("239.255.255.250", 1900)
 AVTRANSPORT_TYPE = "urn:schemas-upnp-org:service:AVTransport:1"
@@ -94,6 +103,67 @@ class DLNAController:
     def __init__(self):
         self.session = requests.Session()
         self.session.trust_env = False
+        self.location_cache = set()
+        self.location_lock = threading.Lock()
+        self.listener_socket = None
+        self.listener_running = True
+        self.listener_thread = threading.Thread(
+            target=self._listen_for_notifications,
+            name="LANERC_TV_SSDP_LISTENER",
+            daemon=True,
+        )
+        self.listener_thread.start()
+
+    @staticmethod
+    def _active_ipv4():
+        route_probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            route_probe.connect(SSDP_ADDRESS)
+            return route_probe.getsockname()[0]
+        finally:
+            route_probe.close()
+
+    def _cache_location(self, location):
+        if urlsplit(location).scheme not in ("http", "https"):
+            return
+        with self.location_lock:
+            is_new = location not in self.location_cache
+            self.location_cache.add(location)
+        if is_new:
+            logger.info("SSDP location: %s", location)
+
+    def _listen_for_notifications(self):
+        multicast_ip = self._active_ipv4()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.listener_socket = sock
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("", 1900))
+            membership = socket.inet_aton(SSDP_ADDRESS[0]) + socket.inet_aton(
+                multicast_ip
+            )
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+            sock.settimeout(0.5)
+            logger.info("Listening for SSDP notifications on %s:1900", multicast_ip)
+            while self.listener_running:
+                try:
+                    data, _ = sock.recvfrom(65535)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+                location = self._parse_ssdp_headers(data).get("location", "")
+                self._cache_location(location)
+        except Exception:
+            logger.exception("Cannot listen for SSDP notifications")
+        finally:
+            sock.close()
+
+    def close(self):
+        self.listener_running = False
+        if self.listener_socket is not None:
+            self.listener_socket.close()
+        self.listener_thread.join(timeout=2)
 
     def discover(self, preferred_ip="", timeout=3):
         search_targets = (
@@ -101,13 +171,14 @@ class DLNAController:
             "upnp:rootdevice",
             "ssdp:all",
         )
-        locations = set()
-        route_probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            route_probe.connect(SSDP_ADDRESS)
-            multicast_ip = route_probe.getsockname()[0]
-        finally:
-            route_probe.close()
+        with self.location_lock:
+            locations = set(self.location_cache)
+        multicast_ip = self._active_ipv4()
+        logger.info(
+            "Starting SSDP search on %s; cached locations: %s",
+            multicast_ip,
+            len(locations),
+        )
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         try:
             sock.bind((multicast_ip, 0))
@@ -139,6 +210,7 @@ class DLNAController:
                     location = headers.get("location", "")
                     if urlsplit(location).scheme in ("http", "https"):
                         locations.add(location)
+                        self._cache_location(location)
                 if locations:
                     break
                 time.sleep(0.15)
@@ -159,8 +231,15 @@ class DLNAController:
             if preferred_ip and device.host != preferred_ip:
                 continue
             devices.append(device)
+            logger.info("DLNA renderer: %s (%s)", device.name, device.host)
 
         devices.sort(key=lambda item: (item.host, item.name))
+        if not devices:
+            logger.warning(
+                "No DLNA TV found; locations=%s preferred_ip=%s",
+                len(locations),
+                preferred_ip or "auto",
+            )
         return devices
 
     @staticmethod
@@ -196,6 +275,12 @@ class DLNAController:
             },
         )
         response.raise_for_status()
+        logger.info(
+            "TV action %s accepted by %s (%s)",
+            action_name,
+            device.name,
+            response.status_code,
+        )
         return response.content
 
 
@@ -244,6 +329,7 @@ class _RelayHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "video/mp2t")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
+        logger.info("TV probed relay stream with HEAD from %s", self.client_address[0])
 
     def do_GET(self):
         if self.path != self.server.relay.stream_path:
@@ -286,6 +372,7 @@ class FFmpegTVRelay:
         self.source_url = source_url
         self.ffmpeg_path = ffmpeg_path
         self.stream_path = "/stream/{}.ts".format(uuid.uuid4().hex)
+        logger.info("Relay prepared for source: %s", source_url)
 
     def url_for(self, device):
         return "http://{}:{}{}".format(
@@ -352,11 +439,30 @@ class FFmpegTVRelay:
             process = subprocess.Popen(
                 self._command(),
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 stdin=subprocess.DEVNULL,
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
             self.process = process
+
+        logger.info(
+            "TV %s opened relay stream; FFmpeg pid=%s",
+            handler.client_address[0],
+            process.pid,
+        )
+
+        def log_stderr():
+            for raw_line in iter(process.stderr.readline, b""):
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if line:
+                    logger.warning("FFmpeg: %s", line)
+
+        stderr_thread = threading.Thread(
+            target=log_stderr,
+            name="LANERC_TV_FFMPEG_LOG",
+            daemon=True,
+        )
+        stderr_thread.start()
 
         handler.send_response(200)
         handler.send_header("Content-Type", "video/mp2t")
@@ -381,6 +487,7 @@ class FFmpegTVRelay:
             with self.process_lock:
                 if self.process is process:
                     self.process = None
+            logger.info("FFmpeg relay ended with exit code %s", process.returncode)
 
     def stop_process(self):
         with self.process_lock:
@@ -458,6 +565,11 @@ class LanercTVRenderer(Renderer):
             source = self.hls_bridge.local_url(source, "playlist")
         self.relay.prepare(source, ffmpeg_path)
         media_url = self.relay.url_for(self.device)
+        logger.info(
+            "Starting TV playback on %s with relay URL %s",
+            self.device.name,
+            media_url,
+        )
         metadata = _didl_metadata(self.title, media_url)
         try:
             self.controller.action(
@@ -484,6 +596,7 @@ class LanercTVRenderer(Renderer):
     def set_media_url(self, url, start="0"):
         self.set_media_stop()
         self.source_url = url
+        logger.info("Received media URL from DLNA controller: %s", url)
         self.set_state_transport("TRANSITIONING")
         self.worker = threading.Thread(
             target=self._start_tv,
@@ -528,4 +641,5 @@ class LanercTVRenderer(Renderer):
             super(LanercTVRenderer, self).stop()
         finally:
             self.relay.close()
+            self.controller.close()
             self.hls_bridge.close()

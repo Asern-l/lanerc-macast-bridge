@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import sys
+import tempfile
 import types
 import unittest
 
@@ -28,6 +29,9 @@ def load_tv_module():
     renderer_module = types.ModuleType("macast.renderer")
     renderer_module.Renderer = type("Renderer", (), {})
     sys.modules["macast.renderer"] = renderer_module
+    utils_module = types.ModuleType("macast.utils")
+    utils_module.SETTING_DIR = tempfile.gettempdir()
+    sys.modules["macast.utils"] = utils_module
 
     renderer_package = types.ModuleType("renderer")
     renderer_package.__path__ = []
@@ -93,6 +97,7 @@ class DeviceDescriptionTests(unittest.TestCase):
 
 class FakeResponse:
     content = b"ok"
+    status_code = 200
 
     def raise_for_status(self):
         return None
