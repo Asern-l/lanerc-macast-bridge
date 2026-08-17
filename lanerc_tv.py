@@ -102,10 +102,22 @@ class DLNAController:
             "ssdp:all",
         )
         locations = set()
+        route_probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            route_probe.connect(SSDP_ADDRESS)
+            multicast_ip = route_probe.getsockname()[0]
+        finally:
+            route_probe.close()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         try:
+            sock.bind((multicast_ip, 0))
             sock.settimeout(0.4)
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+            sock.setsockopt(
+                socket.IPPROTO_IP,
+                socket.IP_MULTICAST_IF,
+                socket.inet_aton(multicast_ip),
+            )
             deadline = time.time() + max(5, timeout)
             while time.time() < deadline:
                 for search_target in search_targets:
