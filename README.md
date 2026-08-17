@@ -25,6 +25,14 @@ Lanerc Cast 是面向 Windows 的 Macast 兼容扩展，让 Lanerc 的 DLNA 投�
 
 ## 安装
 
+### EXE（推荐）
+
+从 [Releases](https://github.com/Asern-l/lanerc-macast-bridge/releases) 下载 `LanercCast-v2.0.1-win64.exe`，直接双击运行。启动器会自动安装或升级插件、保留现有设置、启动 Macast 并打开控制中心。
+
+该社区构建暂未使用商业代码签名证书，Windows SmartScreen 可能在首次运行时显示提醒。可在 Release 页面核对 SHA-256。
+
+### PowerShell
+
 1. 从 Macast 托盘菜单完全退出 Macast。
 2. 在 PowerShell 中进入项目目录并运行：
 
