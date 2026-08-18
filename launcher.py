@@ -1,5 +1,6 @@
-"""Single-file Windows launcher and installer for Lanerc Cast."""
+"""Windows installer and installed launcher for Lanerc Cast."""
 
+import ctypes
 import hashlib
 import json
 import os
@@ -12,14 +13,23 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+try:
+    import winreg
+except ImportError:  # pragma: no cover - Windows-only application
+    winreg = None
+
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 
 APP_NAME = "Lanerc Cast"
-APP_VERSION = "2.2.1"
+APP_VERSION = "2.3.0"
 CONTROL_URL = "http://127.0.0.1:4380/"
 INSTALL_LOCATION_FILE = "LanercCast-location.json"
+INSTALLED_EXE_NAME = "LanercCast.exe"
+INSTALL_MARKER = ".lanerc-cast-install.json"
+UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\LanercCast"
+OWNED_DIRECTORIES = ("engine", "tools", "licenses", "config", "runtime")
 PLUGIN_FILES = (
     "lanerc_proxy.py",
     "lanerc_potplayer.py",
@@ -38,6 +48,45 @@ RUNTIME_FILES = {
 CREATE_NO_WINDOW = 0x08000000
 DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200
+ERROR_ALREADY_EXISTS = 183
+
+
+class SingleInstance:
+    """A process-lifetime Windows mutex with separate installer/app scopes."""
+
+    def __init__(self, scope):
+        self.handle = None
+        self.already_running = False
+        if os.name != "nt":
+            return
+        kernel32 = ctypes.windll.kernel32
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        self.handle = kernel32.CreateMutexW(
+            None, False, "Local\\LanercCast-{}-SingleInstance".format(scope)
+        )
+        if not self.handle:
+            raise ctypes.WinError()
+        self.already_running = kernel32.GetLastError() == ERROR_ALREADY_EXISTS
+
+    def close(self):
+        if self.handle:
+            ctypes.windll.kernel32.CloseHandle(self.handle)
+            self.handle = None
+
+
+def installed_executable_path():
+    return app_data_root() / INSTALLED_EXE_NAME
+
+
+def running_as_installed_app():
+    if "--installed" in sys.argv:
+        return True
+    if not getattr(sys, "frozen", False):
+        return False
+    try:
+        return Path(sys.executable).resolve() == installed_executable_path().resolve()
+    except OSError:
+        return False
 
 
 def resource_root():
@@ -77,6 +126,7 @@ def has_saved_install_location():
 
 def save_install_location(path):
     path = Path(path).expanduser().resolve()
+    validate_install_location(path)
     path.mkdir(parents=True, exist_ok=True)
     local = os.environ.get("LOCALAPPDATA")
     if not local:
@@ -86,6 +136,210 @@ def save_install_location(path):
         json.dumps({"path": str(path)}, ensure_ascii=True, indent=2), encoding="utf-8"
     )
     return path
+
+
+def validate_install_location(path):
+    path = Path(path).expanduser().resolve()
+    if path == Path(path.anchor):
+        raise ValueError("不能安装到磁盘根目录，请选择专用的 LanercCast 文件夹。")
+    protected = {
+        Path(os.environ.get("WINDIR", r"C:\Windows")).resolve(),
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files")).resolve(),
+        Path.home().resolve(),
+    }
+    if path in protected:
+        raise ValueError("不能直接安装到系统目录或用户主目录。")
+    if path.exists() and not (path / INSTALL_MARKER).is_file():
+        try:
+            entries = {item.name for item in path.iterdir()}
+            legacy_entries = set(OWNED_DIRECTORIES) | {INSTALLED_EXE_NAME}
+            if entries and not entries.issubset(legacy_entries):
+                raise ValueError("该目录已有其他文件，请选择空目录或现有 Lanerc Cast 目录。")
+        except OSError as exc:
+            raise ValueError("无法检查安装目录：{}".format(exc)) from exc
+    return path
+
+
+def write_install_marker():
+    marker = app_data_root() / INSTALL_MARKER
+    marker.write_text(
+        json.dumps(
+            {"product": "LanercCast", "version": APP_VERSION},
+            ensure_ascii=True,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def install_application_executable():
+    """Copy the packaged installer to a stable daily-launch location."""
+    if not getattr(sys, "frozen", False):
+        return None
+    source = Path(sys.executable)
+    target = installed_executable_path()
+    copy_if_changed(source, target)
+    return target
+
+
+def powershell_quote(value):
+    return "'{}'".format(str(value).replace("'", "''"))
+
+
+def install_shortcuts_and_registration(executable):
+    if os.name != "nt" or executable is None:
+        return
+    executable = Path(executable)
+    script = "\n".join(
+        (
+            "$w = New-Object -ComObject WScript.Shell",
+            "$desktop = [Environment]::GetFolderPath('Desktop')",
+            "$programs = [Environment]::GetFolderPath('Programs')",
+            "$start = Join-Path $programs 'Lanerc Cast'",
+            "New-Item -ItemType Directory -Force -Path $start | Out-Null",
+            "$s = $w.CreateShortcut((Join-Path $desktop 'Lanerc Cast.lnk'))",
+            "$s.TargetPath = {}".format(powershell_quote(executable)),
+            "$s.WorkingDirectory = {}".format(powershell_quote(executable.parent)),
+            "$s.Save()",
+            "$s = $w.CreateShortcut((Join-Path $start 'Lanerc Cast.lnk'))",
+            "$s.TargetPath = {}".format(powershell_quote(executable)),
+            "$s.WorkingDirectory = {}".format(powershell_quote(executable.parent)),
+            "$s.Save()",
+            "$s = $w.CreateShortcut((Join-Path $start '卸载 Lanerc Cast.lnk'))",
+            "$s.TargetPath = {}".format(powershell_quote(executable)),
+            "$s.Arguments = '--uninstall'",
+            "$s.WorkingDirectory = {}".format(powershell_quote(executable.parent)),
+            "$s.Save()",
+        )
+    )
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+        capture_output=True,
+        text=True,
+        creationflags=CREATE_NO_WINDOW,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("无法创建程序快捷方式：{}".format(result.stderr.strip()))
+    if winreg is not None:
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY) as key:
+            values = {
+                "DisplayName": APP_NAME,
+                "DisplayVersion": APP_VERSION,
+                "Publisher": "Lanerc Cast Community",
+                "InstallLocation": str(executable.parent),
+                "DisplayIcon": str(executable),
+                "UninstallString": '"{}" --uninstall'.format(executable),
+                "QuietUninstallString": '"{}" --uninstall --quiet'.format(executable),
+            }
+            for name, value in values.items():
+                winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
+            winreg.SetValueEx(key, "NoModify", 0, winreg.REG_DWORD, 1)
+            winreg.SetValueEx(key, "NoRepair", 0, winreg.REG_DWORD, 1)
+
+
+def remove_shortcuts_and_registration():
+    if os.name == "nt":
+        script = "\n".join(
+            (
+                "$desktop = [Environment]::GetFolderPath('Desktop')",
+                "$programs = [Environment]::GetFolderPath('Programs')",
+                "Remove-Item -LiteralPath (Join-Path $desktop 'Lanerc Cast.lnk') -Force -ErrorAction SilentlyContinue",
+                "Remove-Item -LiteralPath (Join-Path $programs 'Lanerc Cast') -Recurse -Force -ErrorAction SilentlyContinue",
+            )
+        )
+        subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True,
+            creationflags=CREATE_NO_WINDOW,
+            check=False,
+        )
+    if winreg is not None:
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY)
+        except FileNotFoundError:
+            pass
+
+
+def restore_macast_config_location():
+    """Remove only our compatibility junction and restore pre-install config."""
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        return
+    standard = Path(local) / "xfangfang" / "Macast"
+    target = app_data_root() / "config" / "Macast"
+    linked_to_target = False
+    if standard.exists() and target.exists():
+        try:
+            linked_to_target = standard.samefile(target)
+        except OSError:
+            pass
+    if not linked_to_target:
+        return
+    # rmdir removes the junction itself, not the directory it points at.
+    standard.rmdir()
+    backups = sorted(standard.parent.glob("Macast-before-LanercCast*"))
+    if backups:
+        backups[0].rename(standard)
+
+
+def schedule_owned_file_cleanup():
+    root = app_data_root()
+    marker = root / INSTALL_MARKER
+    if not marker.is_file():
+        raise RuntimeError("未找到有效安装标记，为避免误删已停止卸载。")
+    marker_data = json.loads(marker.read_text(encoding="utf-8"))
+    if marker_data.get("product") != "LanercCast":
+        raise RuntimeError("安装标记无效，为避免误删已停止卸载。")
+
+    paths = [root / name for name in OWNED_DIRECTORIES]
+    paths.extend((root / INSTALLED_EXE_NAME, marker))
+    commands = ["Wait-Process -Id {} -ErrorAction SilentlyContinue".format(os.getpid())]
+    for path in paths:
+        commands.append(
+            "Remove-Item -LiteralPath {} -Recurse -Force -ErrorAction SilentlyContinue".format(
+                powershell_quote(path)
+            )
+        )
+    commands.append(
+        "Remove-Item -LiteralPath {} -Force -ErrorAction SilentlyContinue".format(
+            powershell_quote(root)
+        )
+    )
+    subprocess.Popen(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", "\n".join(commands)],
+        close_fds=True,
+        creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS,
+    )
+
+
+def uninstall_application(quiet=False):
+    root = tk.Tk()
+    root.withdraw()
+    if not quiet and not messagebox.askyesno(
+        "卸载 {}".format(APP_NAME),
+        "将卸载 Lanerc Cast，并删除其运行组件和配置。\n不会删除安装目录中的其他文件。\n\n是否继续？",
+        parent=root,
+    ):
+        root.destroy()
+        return 0
+    try:
+        if macast_processes():
+            stop_macast()
+        remove_shortcuts_and_registration()
+        restore_macast_config_location()
+        schedule_owned_file_cleanup()
+        location_file = Path(os.environ["LOCALAPPDATA"]) / INSTALL_LOCATION_FILE
+        location_file.unlink(missing_ok=True)
+        if not quiet:
+            messagebox.showinfo(APP_NAME, "Lanerc Cast 已卸载。", parent=root)
+        root.destroy()
+        return 0
+    except Exception as exc:
+        if not quiet:
+            messagebox.showerror(APP_NAME, "卸载失败：{}".format(exc), parent=root)
+        root.destroy()
+        return 1
 
 
 def ensure_macast_config_link():
@@ -366,6 +620,8 @@ def wait_for_control_center(timeout=25):
 class LauncherWindow:
     def __init__(self, no_open=False):
         self.no_open = no_open
+        self.installer_mode = not running_as_installed_app()
+        self.post_install_executable = None
         self.root = tk.Tk()
         self.root.title("{} {}".format(APP_NAME, APP_VERSION))
         self.root.geometry("560x330")
@@ -398,7 +654,7 @@ class LauncherWindow:
 
         body = tk.Frame(self.root, bg="#f2f5f7")
         body.pack(fill="both", expand=True, padx=28, pady=24)
-        self.setup_required = not has_saved_install_location()
+        self.setup_required = self.installer_mode
         self.install_path = tk.StringVar(
             value=(str(Path("D:/LanercCast")) if Path("D:/").exists() else str(app_data_root()))
         )
@@ -439,7 +695,7 @@ class LauncherWindow:
             self.start_button.pack(anchor="e", pady=(12, 0))
         self.status = tk.Label(
             body,
-            text=("请选择安装目录后继续" if self.setup_required else "正在准备…"),
+            text=("选择安装目录后开始安装" if self.setup_required else "正在启动 Lanerc Cast…"),
             fg="#17232d",
             bg="#f2f5f7",
             anchor="w",
@@ -546,14 +802,27 @@ class LauncherWindow:
             self.progress.stop()
             self.status.config(text=message)
             if success:
-                self.detail.config(text="控制中心已就绪")
-                self.root.after(900, self.root.destroy)
+                self.detail.config(
+                    text=("安装完成，正在打开 Lanerc Cast" if self.post_install_executable else "控制中心已就绪")
+                )
+                self.root.after(700, self.finish_success)
             else:
                 self.detail.config(text="详情已写入 lanerc_launcher.log")
                 messagebox.showerror(APP_NAME, message, parent=self.root)
                 self.root.destroy()
 
         self.root.after(0, update)
+
+    def finish_success(self):
+        executable = self.post_install_executable
+        self.root.destroy()
+        if executable is not None:
+            subprocess.Popen(
+                [str(executable)],
+                cwd=str(executable.parent),
+                close_fds=True,
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+            )
 
     def run(self):
         try:
@@ -576,6 +845,14 @@ class LauncherWindow:
                 ensure_macast_config_link()
                 self.set_status("正在检查内置运行组件…")
                 ensure_bundled_runtime()
+            if self.installer_mode:
+                self.set_status("正在创建程序入口…", "安装完成后会自动打开正式程序")
+                executable = install_application_executable()
+                install_shortcuts_and_registration(executable)
+                write_install_marker()
+                self.post_install_executable = executable
+                self.finish(True, "Lanerc Cast 安装完成")
+                return
             executable = find_macast_executable() or self.ask_macast_file()
             if executable is None:
                 self.finish(False, "未找到 Macast 主程序。")
@@ -598,8 +875,25 @@ class LauncherWindow:
 
 
 def main():
+    if "--uninstall" in sys.argv:
+        return uninstall_application(quiet="--quiet" in sys.argv)
     no_open = "--no-open" in sys.argv
-    return LauncherWindow(no_open=no_open).mainloop()
+    app_mode = running_as_installed_app()
+    instance = SingleInstance("App" if app_mode else "Installer")
+    if instance.already_running:
+        if app_mode:
+            webbrowser.open(CONTROL_URL)
+        else:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showinfo(APP_NAME, "安装程序已经在运行。", parent=root)
+            root.destroy()
+        instance.close()
+        return 0
+    try:
+        return LauncherWindow(no_open=no_open).mainloop()
+    finally:
+        instance.close()
 
 
 if __name__ == "__main__":

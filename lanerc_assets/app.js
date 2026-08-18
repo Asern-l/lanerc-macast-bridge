@@ -1,5 +1,5 @@
 const state = {
-  app: { name: 'Lanerc Cast', version: '2.2.1' },
+  app: { name: 'Lanerc Cast', version: '2.3.0' },
   service: { state: 'starting', control_port: 4380, active_backend: null },
   mode: 'local',
   player: 'potplayer',
@@ -69,7 +69,7 @@ function renderService() {
   const target = $('service-state');
   target.className = `service-state ${ready ? 'ready' : 'error'}`;
   target.lastElementChild.textContent = ready ? 'Macast 服务正常' : '服务正在启动';
-  $('app-version').textContent = state.app?.version || '2.2.1';
+  $('app-version').textContent = state.app?.version || '2.3.0';
 }
 
 function renderWarnings() {

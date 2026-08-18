@@ -18,7 +18,7 @@ with sync_playwright() as p:
     assert status_response.ok
     status_payload = status_response.json()
     assert status_payload["ok"] is True
-    assert status_payload["data"]["app"]["version"] == "2.2.1"
+    assert status_payload["data"]["app"]["version"] == "2.3.0"
     saved_settings = {
         key: status_payload["data"][key]
         for key in ("mode", "player", "potplayer_path", "selected_tv", "tv_audio", "audio_delay", "auto_sync")

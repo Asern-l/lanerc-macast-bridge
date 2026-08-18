@@ -8,4 +8,5 @@ tests/pro-dashboard*.png
 .build-venv/
 build/
 dist/
+._build_runtime/
 *.spec

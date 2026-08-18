@@ -12,6 +12,20 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class LauncherInstallTests(unittest.TestCase):
+    def test_install_location_rejects_nonempty_unowned_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = pathlib.Path(temp_dir)
+            (path / "user-file.txt").write_text("keep", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                launcher.validate_install_location(path)
+
+    def test_install_location_allows_existing_product_directories(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = pathlib.Path(temp_dir)
+            (path / "engine").mkdir()
+            (path / "config").mkdir()
+            self.assertEqual(launcher.validate_install_location(path), path.resolve())
+
     def test_bundled_runtime_is_extracted_to_user_directory(self):
         with tempfile.TemporaryDirectory() as source_dir, tempfile.TemporaryDirectory() as local_dir:
             source_root = pathlib.Path(source_dir)
