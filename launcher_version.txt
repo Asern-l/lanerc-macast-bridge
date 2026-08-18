@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(2, 3, 0, 0),
-    prodvers=(2, 3, 0, 0),
+    filevers=(2, 3, 1, 0),
+    prodvers=(2, 3, 1, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -15,12 +15,12 @@ VSVersionInfo(
         u'080404b0',
         [StringStruct(u'CompanyName', u'Asern-l'),
          StringStruct(u'FileDescription', u'Lanerc Cast Launcher'),
-         StringStruct(u'FileVersion', u'2.3.0'),
+         StringStruct(u'FileVersion', u'2.3.1'),
          StringStruct(u'InternalName', u'LanercCast'),
          StringStruct(u'LegalCopyright', u'MIT License'),
-         StringStruct(u'OriginalFilename', u'LanercCast-v2.3.0-win64-standalone.exe'),
+         StringStruct(u'OriginalFilename', u'LanercCast-v2.3.1-win64-standalone.exe'),
          StringStruct(u'ProductName', u'Lanerc Cast'),
-         StringStruct(u'ProductVersion', u'2.3.0')])
+         StringStruct(u'ProductVersion', u'2.3.1')])
     ]),
     VarFileInfo([VarStruct(u'Translation', [2052, 1200])])
   ]

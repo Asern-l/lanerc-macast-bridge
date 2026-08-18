@@ -19,12 +19,13 @@ class LauncherInstallTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 launcher.validate_install_location(path)
 
-    def test_install_location_allows_existing_product_directories(self):
+    def test_install_location_requires_marker_for_existing_directory(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = pathlib.Path(temp_dir)
             (path / "engine").mkdir()
             (path / "config").mkdir()
-            self.assertEqual(launcher.validate_install_location(path), path.resolve())
+            with self.assertRaises(ValueError):
+                launcher.validate_install_location(path)
 
     def test_bundled_runtime_is_extracted_to_user_directory(self):
         with tempfile.TemporaryDirectory() as source_dir, tempfile.TemporaryDirectory() as local_dir:

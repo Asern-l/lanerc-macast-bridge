@@ -23,7 +23,7 @@ from tkinter import filedialog, messagebox, ttk
 
 
 APP_NAME = "Lanerc Cast"
-APP_VERSION = "2.3.0"
+APP_VERSION = "2.3.1"
 CONTROL_URL = "http://127.0.0.1:4380/"
 INSTALL_LOCATION_FILE = "LanercCast-location.json"
 INSTALLED_EXE_NAME = "LanercCast.exe"
@@ -152,8 +152,7 @@ def validate_install_location(path):
     if path.exists() and not (path / INSTALL_MARKER).is_file():
         try:
             entries = {item.name for item in path.iterdir()}
-            legacy_entries = set(OWNED_DIRECTORIES) | {INSTALLED_EXE_NAME}
-            if entries and not entries.issubset(legacy_entries):
+            if entries:
                 raise ValueError("该目录已有其他文件，请选择空目录或现有 Lanerc Cast 目录。")
         except OSError as exc:
             raise ValueError("无法检查安装目录：{}".format(exc)) from exc
@@ -197,17 +196,13 @@ def install_shortcuts_and_registration(executable):
             "$programs = [Environment]::GetFolderPath('Programs')",
             "$start = Join-Path $programs 'Lanerc Cast'",
             "New-Item -ItemType Directory -Force -Path $start | Out-Null",
+            "Remove-Item -LiteralPath (Join-Path $start '卸载 Lanerc Cast.lnk') -Force -ErrorAction SilentlyContinue",
             "$s = $w.CreateShortcut((Join-Path $desktop 'Lanerc Cast.lnk'))",
             "$s.TargetPath = {}".format(powershell_quote(executable)),
             "$s.WorkingDirectory = {}".format(powershell_quote(executable.parent)),
             "$s.Save()",
             "$s = $w.CreateShortcut((Join-Path $start 'Lanerc Cast.lnk'))",
             "$s.TargetPath = {}".format(powershell_quote(executable)),
-            "$s.WorkingDirectory = {}".format(powershell_quote(executable.parent)),
-            "$s.Save()",
-            "$s = $w.CreateShortcut((Join-Path $start '卸载 Lanerc Cast.lnk'))",
-            "$s.TargetPath = {}".format(powershell_quote(executable)),
-            "$s.Arguments = '--uninstall'",
             "$s.WorkingDirectory = {}".format(powershell_quote(executable.parent)),
             "$s.Save()",
         )
@@ -234,6 +229,7 @@ def install_shortcuts_and_registration(executable):
             }
             for name, value in values.items():
                 winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
+            winreg.SetValueEx(key, "EstimatedSize", 0, winreg.REG_DWORD, 115000)
             winreg.SetValueEx(key, "NoModify", 0, winreg.REG_DWORD, 1)
             winreg.SetValueEx(key, "NoRepair", 0, winreg.REG_DWORD, 1)
 
@@ -287,7 +283,7 @@ def schedule_owned_file_cleanup():
     root = app_data_root()
     marker = root / INSTALL_MARKER
     if not marker.is_file():
-        raise RuntimeError("未找到有效安装标记，为避免误删已停止卸载。")
+        raise RuntimeError("未找到本版本安装标记，为避免误删已停止卸载。")
     marker_data = json.loads(marker.read_text(encoding="utf-8"))
     if marker_data.get("product") != "LanercCast":
         raise RuntimeError("安装标记无效，为避免误删已停止卸载。")

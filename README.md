@@ -34,9 +34,11 @@ EXE 已内置 Macast 0.7 运行引擎和 FFmpeg，不需要用户另外安装。
 
 ### EXE（推荐）
 
-从 [Releases](https://github.com/Asern-l/lanerc-macast-bridge/releases) 下载 `LanercCast-v2.3.0-win64-standalone.exe`，直接双击运行。它是安装程序：首次运行选择专用安装目录后，会复制正式入口 `LanercCast.exe`、创建桌面和开始菜单快捷方式，并自动打开正式程序。以后请从快捷方式或安装目录中的 `LanercCast.exe` 启动；安装程序支持重新运行进行升级。
+从 [Releases](https://github.com/Asern-l/lanerc-macast-bridge/releases) 下载 `LanercCast-v2.3.1-win64-standalone.exe`，直接双击运行。它是安装程序：首次运行选择专用安装目录后，会复制正式入口 `LanercCast.exe`、创建桌面和开始菜单快捷方式，并自动打开正式程序。以后请从快捷方式或安装目录中的 `LanercCast.exe` 启动；安装程序支持重新运行进行升级。
 
-卸载可在 Windows“已安装的应用”中选择 Lanerc Cast，或从开始菜单打开“卸载 Lanerc Cast”。卸载仅删除本程序安装清单中的内容，不会递归删除安装目录中的其他文件。
+卸载只需在 Windows“已安装的应用”中选择 Lanerc Cast。卸载仅删除本程序安装清单中的内容，不会递归删除安装目录中的其他文件。
+
+本版本使用独立安装标记。旧版目录不会被自动接管；请先手动清理旧版，或选择新的空安装目录。
 
 该社区构建暂未使用商业代码签名证书，Windows SmartScreen 可能在首次运行时显示提醒。可在 Release 页面核对 SHA-256。
 
