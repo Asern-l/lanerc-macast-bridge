@@ -1,0 +1,37 @@
+name: Bug report
+description: 报告可复现的问题
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先确认使用的是最新 Release，并移除日志中的账号、Cookie、完整媒体地址和私人 IP。
+  - type: input
+    id: version
+    attributes:
+      label: Lanerc Cast 版本
+      placeholder: "2.2.1"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows 版本
+      placeholder: "Windows 11 24H2"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请按顺序描述操作和实际结果。
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏日志
+      description: 请删除账号、Cookie、完整媒体地址和私人 IP 后再粘贴。
+    validations:
+      required: false

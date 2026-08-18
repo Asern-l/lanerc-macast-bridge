@@ -1,5 +1,7 @@
 # Lanerc Cast
 
+[![Tests](https://github.com/Asern-l/lanerc-macast-bridge/actions/workflows/tests.yml/badge.svg)](https://github.com/Asern-l/lanerc-macast-bridge/actions/workflows/tests.yml) [![Latest release](https://img.shields.io/github/v/release/Asern-l/lanerc-macast-bridge)](https://github.com/Asern-l/lanerc-macast-bridge/releases/latest) [![License](https://img.shields.io/github/license/Asern-l/lanerc-macast-bridge)](LICENSE)
+
 Lanerc Cast 是面向 Windows 的 Macast 兼容扩展，让 Lanerc 的 DLNA 投屏可以在电脑播放器中可靠播放，并可选通过电脑转码后发送到电视。
 
 > 本项目为社区兼容工具，与 Lanerc、Macast、PotPlayer 或电视厂商无官方隶属关系。
@@ -16,6 +18,10 @@ Lanerc Cast 是面向 Windows 的 Macast 兼容扩展，让 Lanerc 的 DLNA 投�
 - 保留升级前配置备份，更新版本时不重置用户选择。
 
 媒体采用边传输边播放，不会保存为完整视频文件。
+
+## 项目定位
+
+这是一个独立的社区兼容项目，目标是让 Windows 用户直接接收 Lanerc 的 DLNA 投屏。它不提供视频内容、不绕过账号验证，也不修改 Lanerc 客户端。
 
 ## 系统要求
 
@@ -110,4 +116,8 @@ python tests\playwright_pro.py
 
 ## License
 
-[MIT](LICENSE)
+本项目代码采用 [MIT License](LICENSE)。随 EXE 分发的 Macast 和 FFmpeg 组件分别遵循其 GPLv3 许可证，相关文本和来源说明见 [`third_party/`](third_party/)。
+
+## 参与贡献
+
+欢迎提交可复现的问题报告、兼容性信息和改进建议。提交前请先阅读 [贡献指南](CONTRIBUTING.md)，不要在 Issue 或日志中粘贴账号、Cookie、完整媒体地址或私人 IP 信息。
