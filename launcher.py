@@ -17,8 +17,9 @@ from tkinter import filedialog, messagebox, ttk
 
 
 APP_NAME = "Lanerc Cast"
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.2.0"
 CONTROL_URL = "http://127.0.0.1:4380/"
+INSTALL_LOCATION_FILE = "LanercCast-location.json"
 PLUGIN_FILES = (
     "lanerc_proxy.py",
     "lanerc_potplayer.py",
@@ -47,6 +48,8 @@ def config_root():
     local = os.environ.get("LOCALAPPDATA")
     if not local:
         raise RuntimeError("无法确定 Windows 用户配置目录。")
+    if has_saved_install_location():
+        return app_data_root() / "config" / "Macast"
     return Path(local) / "xfangfang" / "Macast"
 
 
@@ -54,7 +57,72 @@ def app_data_root():
     local = os.environ.get("LOCALAPPDATA")
     if not local:
         raise RuntimeError("无法确定 Windows 用户配置目录。")
-    return Path(local) / "LanercCast"
+    default = Path(local) / "LanercCast"
+    location_file = Path(local) / INSTALL_LOCATION_FILE
+    try:
+        configured = json.loads(location_file.read_text(encoding="utf-8")).get("path")
+        if configured:
+            return Path(configured).expanduser()
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return default
+
+
+def has_saved_install_location():
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        return False
+    return (Path(local) / INSTALL_LOCATION_FILE).is_file()
+
+
+def save_install_location(path):
+    path = Path(path).expanduser().resolve()
+    path.mkdir(parents=True, exist_ok=True)
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        raise RuntimeError("无法确定 Windows 用户配置目录。")
+    location_file = Path(local) / INSTALL_LOCATION_FILE
+    location_file.write_text(
+        json.dumps({"path": str(path)}, ensure_ascii=True, indent=2), encoding="utf-8"
+    )
+    return path
+
+
+def ensure_macast_config_link():
+    """Keep Macast's standard path as a junction to the selected install disk."""
+    local = os.environ.get("LOCALAPPDATA")
+    if not local or not has_saved_install_location():
+        return config_root()
+    target = app_data_root() / "config" / "Macast"
+    standard = Path(local) / "xfangfang" / "Macast"
+    target.mkdir(parents=True, exist_ok=True)
+    if standard.exists():
+        try:
+            if standard.samefile(target):
+                return target
+        except OSError:
+            pass
+        if not standard.is_symlink():
+            backup = standard.with_name("Macast-before-LanercCast")
+            suffix = 1
+            while backup.exists():
+                backup = standard.with_name("Macast-before-LanercCast-{}".format(suffix))
+                suffix += 1
+            shutil.copytree(standard, target, dirs_exist_ok=True)
+            standard.rename(backup)
+    standard.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(standard), str(target)],
+        capture_output=True,
+        text=True,
+        encoding="oem",
+        errors="replace",
+        creationflags=CREATE_NO_WINDOW,
+        check=False,
+    )
+    if result.returncode != 0 and not standard.exists():
+        raise RuntimeError("无法将 Macast 配置迁移到所选目录：{}".format(result.stderr.strip()))
+    return target
 
 
 def log_message(message):
@@ -229,7 +297,10 @@ def install_plugin():
     settings.setdefault("LanercControlPort", 4380)
     settings.setdefault("LanercTVIP", "")
     settings.setdefault("LanercTVLocation", "")
-    settings.setdefault("LanercFFmpegPath", ffmpeg)
+    if ffmpeg:
+        settings["LanercFFmpegPath"] = ffmpeg
+    else:
+        settings.setdefault("LanercFFmpegPath", "")
     settings.setdefault("LanercRelayPort", 0)
     settings_path.write_text(
         json.dumps(settings, ensure_ascii=True, indent=4, sort_keys=True),
@@ -296,7 +367,7 @@ class LauncherWindow:
         self.no_open = no_open
         self.root = tk.Tk()
         self.root.title("{} {}".format(APP_NAME, APP_VERSION))
-        self.root.geometry("500x270")
+        self.root.geometry("560x330")
         self.root.resizable(False, False)
         self.root.configure(bg="#f2f5f7")
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
@@ -326,9 +397,48 @@ class LauncherWindow:
 
         body = tk.Frame(self.root, bg="#f2f5f7")
         body.pack(fill="both", expand=True, padx=28, pady=24)
+        self.setup_required = not has_saved_install_location()
+        self.install_path = tk.StringVar(
+            value=(str(Path("D:/LanercCast")) if Path("D:/").exists() else str(app_data_root()))
+        )
+        self.install_frame = None
+        self.start_button = None
+        if self.setup_required:
+            self.install_frame = tk.Frame(body, bg="#f2f5f7")
+            self.install_frame.pack(fill="x", pady=(0, 18))
+            tk.Label(
+                self.install_frame,
+                text="安装目录",
+                fg="#17232d",
+                bg="#f2f5f7",
+                anchor="w",
+                font=("Microsoft YaHei UI", 10),
+            ).pack(fill="x", pady=(0, 6))
+            path_row = tk.Frame(self.install_frame, bg="#f2f5f7")
+            path_row.pack(fill="x")
+            tk.Entry(
+                path_row,
+                textvariable=self.install_path,
+                font=("Segoe UI", 10),
+                relief="solid",
+                bd=1,
+            ).pack(side="left", fill="x", expand=True, ipady=5)
+            tk.Button(
+                path_row,
+                text="浏览…",
+                command=self.browse_install_folder,
+                width=8,
+            ).pack(side="left", padx=(8, 0), ipady=2)
+            self.start_button = tk.Button(
+                self.install_frame,
+                text="开始安装",
+                command=self.begin_install,
+                width=14,
+            )
+            self.start_button.pack(anchor="e", pady=(12, 0))
         self.status = tk.Label(
             body,
-            text="正在准备…",
+            text=("请选择安装目录后继续" if self.setup_required else "正在准备…"),
             fg="#17232d",
             bg="#f2f5f7",
             anchor="w",
@@ -336,8 +446,9 @@ class LauncherWindow:
         )
         self.status.pack(fill="x", pady=(0, 16))
         self.progress = ttk.Progressbar(body, mode="indeterminate")
-        self.progress.pack(fill="x")
-        self.progress.start(12)
+        if not self.setup_required:
+            self.progress.pack(fill="x")
+            self.progress.start(12)
         self.detail = tk.Label(
             body,
             text="控制中心仅在本机运行",
@@ -348,13 +459,44 @@ class LauncherWindow:
         )
         self.detail.pack(fill="x", pady=(12, 0))
         self.exit_code = 1
-        self.root.after(150, lambda: threading.Thread(target=self.run, daemon=True).start())
+        if not self.setup_required:
+            self.root.after(150, self.start_worker)
 
     def _center(self):
         self.root.update_idletasks()
-        x = (self.root.winfo_screenwidth() - 500) // 2
-        y = (self.root.winfo_screenheight() - 270) // 2
-        self.root.geometry("500x270+{}+{}".format(x, y))
+        x = (self.root.winfo_screenwidth() - 560) // 2
+        y = (self.root.winfo_screenheight() - 330) // 2
+        self.root.geometry("560x330+{}+{}".format(x, y))
+
+    def browse_install_folder(self):
+        selected = filedialog.askdirectory(
+            parent=self.root,
+            title="选择 Lanerc Cast 安装目录",
+            initialdir=self.install_path.get() or "D:/",
+            mustexist=False,
+        )
+        if selected:
+            self.install_path.set(selected)
+
+    def begin_install(self):
+        selected = self.install_path.get().strip()
+        if not selected:
+            messagebox.showwarning(APP_NAME, "请先填写安装目录。", parent=self.root)
+            return
+        try:
+            save_install_location(Path(selected))
+        except (OSError, ValueError) as exc:
+            messagebox.showerror(APP_NAME, "安装目录不可用：{}".format(exc), parent=self.root)
+            return
+        self.start_button.config(state="disabled")
+        self.install_frame.pack_forget()
+        self.status.config(text="正在准备…")
+        self.progress.pack(fill="x")
+        self.progress.start(12)
+        self.start_worker()
+
+    def start_worker(self):
+        threading.Thread(target=self.run, daemon=True).start()
 
     def set_status(self, text, detail=None):
         self.root.after(0, lambda: self.status.config(text=text))
@@ -422,11 +564,15 @@ class LauncherWindow:
                 self.set_status("正在关闭 Macast…")
                 stop_macast()
             if needs_install:
+                if not has_saved_install_location():
+                    raise RuntimeError("未设置安装目录。")
+                ensure_macast_config_link()
                 self.set_status("正在安装 Lanerc Cast…", "现有设置将被保留")
                 self.set_status("正在准备内置运行组件…", "首次运行需要提取 DLNA 引擎和 FFmpeg")
                 ensure_bundled_runtime()
                 install_plugin()
             else:
+                ensure_macast_config_link()
                 self.set_status("正在检查内置运行组件…")
                 ensure_bundled_runtime()
             executable = find_macast_executable() or self.ask_macast_file()

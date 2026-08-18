@@ -30,6 +30,22 @@ class LauncherInstallTests(unittest.TestCase):
                         (pathlib.Path(local_dir) / "LanercCast" / target_name).read_bytes(),
                     )
 
+    def test_bundled_runtime_uses_saved_custom_directory(self):
+        with tempfile.TemporaryDirectory() as source_dir, tempfile.TemporaryDirectory() as local_dir, tempfile.TemporaryDirectory() as custom_dir:
+            source_root = pathlib.Path(source_dir)
+            for index, source_name in enumerate(launcher.RUNTIME_FILES):
+                path = source_root / source_name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(("runtime-{}".format(index)).encode())
+            location_file = pathlib.Path(local_dir) / launcher.INSTALL_LOCATION_FILE
+            location_file.write_text(json.dumps({"path": custom_dir}), encoding="utf-8")
+            with mock.patch.dict(os.environ, {"LOCALAPPDATA": local_dir}), mock.patch.object(
+                launcher, "resource_root", return_value=source_root
+            ):
+                executable = launcher.ensure_bundled_runtime()
+                self.assertTrue(executable.is_file())
+                self.assertEqual(executable.parent.parent, pathlib.Path(custom_dir))
+
     def test_fresh_install_creates_current_plugin_and_defaults(self):
         with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
             os.environ, {"LOCALAPPDATA": temp_dir}
