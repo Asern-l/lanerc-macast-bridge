@@ -13,7 +13,7 @@ class ProPackageTests(unittest.TestCase):
         style = (ROOT / "lanerc_assets" / "app.css").read_text(encoding="utf-8")
 
         self.assertIn("<macast.title>Lanerc Cast</macast.title>", plugin)
-        self.assertIn("APP_VERSION = \"2.3.0\"", plugin)
+        self.assertIn("APP_VERSION = \"2.3.1\"", plugin)
         self.assertIn('id="mode-local"', panel)
         self.assertIn('id="mode-tv"', panel)
         self.assertIn('id="devices"', panel)

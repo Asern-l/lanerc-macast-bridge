@@ -91,7 +91,7 @@ $json = ConvertTo-AsciiJson $settings
 [IO.File]::WriteAllText($settingsPath, $json, [Text.UTF8Encoding]::new($false))
 
 Write-Host ''
-Write-Host 'Lanerc Cast 2.3.0 安装完成' -ForegroundColor Green
+Write-Host 'Lanerc Cast 2.3.1 安装完成' -ForegroundColor Green
 Write-Host "  插件目录：$rendererDir"
 Write-Host '  控制中心：http://127.0.0.1:4380/'
 Write-Host "  本机播放器：$(if ($potPlayer) { 'PotPlayer' } else { 'Macast 内置播放器' })"
