@@ -1,127 +1,106 @@
-# Lanerc Cast
+# Lanerc Cast for Windows
 
-[![Tests](https://github.com/Asern-l/lanerc-macast-bridge/actions/workflows/tests.yml/badge.svg)](https://github.com/Asern-l/lanerc-macast-bridge/actions/workflows/tests.yml) [![Latest release](https://img.shields.io/github/v/release/Asern-l/lanerc-macast-bridge)](https://github.com/Asern-l/lanerc-macast-bridge/releases/latest) [![License](https://img.shields.io/github/license/Asern-l/lanerc-macast-bridge)](LICENSE)
+[![Tests](https://github.com/Asern-l/lanerc-cast-windows/actions/workflows/tests.yml/badge.svg)](https://github.com/Asern-l/lanerc-cast-windows/actions/workflows/tests.yml) [![Latest release](https://img.shields.io/github/v/release/Asern-l/lanerc-cast-windows)](https://github.com/Asern-l/lanerc-cast-windows/releases/latest) [![License](https://img.shields.io/github/license/Asern-l/lanerc-cast-windows)](LICENSE)
 
-Lanerc Cast 是面向 Windows 的 Macast 兼容扩展，让 Lanerc 的 DLNA 投屏可以在电脑播放器中可靠播放，并可选通过电脑转码后发送到电视。
+Lanerc Cast for Windows 是一个社区维护的 Windows DLNA 接收与电视中转工具。它接收局域网内应用发起的 DLNA 投屏，在电脑播放器中播放，也可以选择使用 FFmpeg 将媒体转换为电视更容易接受的格式后再发送到电视。
 
-> 本项目为社区兼容工具，与 Lanerc、Macast、PotPlayer 或电视厂商无官方隶属关系。
+本项目不提供视频内容、不修改 Lanerc 客户端、不处理登录凭据，也不提供账号验证绕过功能。它与 Lanerc、Macast、PotPlayer 或任何电视厂商没有官方隶属关系。
 
-## 主要功能
+## 功能
 
-- 修复部分 Lanerc HLS 分片带 JPEG 前缀而无法播放的问题；
-- 自动选择已安装的 PotPlayer，未安装时使用 Macast 内置播放器；
-- 支持手动填写 PotPlayer 程序路径，非标准安装位置也可使用；
-- 实时发现同一局域网中的 DLNA 电视；
-- 使用 FFmpeg 转码为兼容性较高的 H.264、AAC 和 MPEG-TS；
-- 可选将电视画面与电脑声音分离，用于连接电脑的耳机；
-- 提供仅监听本机的控制中心，集中管理播放位置、电视和声音设置；
-- 保留升级前配置备份，更新版本时不重置用户选择。
+- 将电脑显示为 DLNA 播放设备，接收 Lanerc 等应用的投屏请求；
+- 自动修复带 PNG/JPEG 图片前缀的 HLS 分片，避免严格的 FFmpeg 将其误识别为图片；
+- 电脑本地播放：优先使用 PotPlayer，也支持 Macast 内置播放器；
+- 电视中转：使用 FFmpeg 转换为 H.264/AAC/MPEG-TS，并实时发现局域网电视；
+- 支持手动指定 PotPlayer 路径和电视设备；
+- 提供仅监听 `127.0.0.1` 的本地控制中心；
+- 播放采用边传输边处理，不会主动保存完整视频文件。
 
-媒体采用边传输边播放，不会保存为完整视频文件。
+## 下载与安装
 
-## 项目定位
+推荐下载最新 Release：
 
-这是一个独立的社区兼容项目，目标是让 Windows 用户直接接收 Lanerc 的 DLNA 投屏。它不提供视频内容、不绕过账号验证，也不修改 Lanerc 客户端。
+[LanercCast-v2.3.1-win64-standalone.exe](https://github.com/Asern-l/lanerc-cast-windows/releases/download/v2.3.1/LanercCast-v2.3.1-win64-standalone.exe)
 
-## 系统要求
+这个 EXE 是安装程序，不是日常启动入口。双击后选择一个专用的空目录，例如 `D:\LanercCast`。安装完成后会：
 
-- Windows 10 或 Windows 11；
-- PotPlayer（可选，本机播放和电脑声音输出推荐）。
+1. 将正式入口安装为 `LanercCast.exe`；
+2. 创建桌面和开始菜单中的正常启动快捷方式；
+3. 自动打开正式程序和本地控制中心；
+4. 在 Windows“已安装的应用”中注册 Lanerc Cast。
 
-EXE 已内置 Macast 0.7 运行引擎和 FFmpeg，不需要用户另外安装。首次运行会让你选择运行时目录（例如 `D:\LanercCast`），之后会记住该位置；如果不更改，默认使用 `%LOCALAPPDATA%\LanercCast`。
+以后请从快捷方式或安装目录中的 `LanercCast.exe` 启动，不要直接重复运行下载的安装包。安装器和正式程序均启用单实例保护。
 
-## 安装
+本版本使用严格的安装标记，不会自动接管旧版目录。若电脑已有旧版，请先在 Windows“已安装的应用”中卸载旧版，再选择新的空目录安装。
 
-### EXE（推荐）
+卸载只需打开 Windows“设置 → 应用 → 已安装的应用”，找到 Lanerc Cast 并点击“卸载”。卸载仅清理本程序安装清单中的文件、注册信息和快捷方式，不会递归删除安装目录中的其他文件；安装前存在的 Macast 配置会被恢复。
 
-从 [Releases](https://github.com/Asern-l/lanerc-macast-bridge/releases) 下载 `LanercCast-v2.3.1-win64-standalone.exe`，直接双击运行。它是安装程序：首次运行选择专用安装目录后，会复制正式入口 `LanercCast.exe`、创建桌面和开始菜单快捷方式，并自动打开正式程序。以后请从快捷方式或安装目录中的 `LanercCast.exe` 启动；安装程序支持重新运行进行升级。
+### 运行目录
 
-卸载只需在 Windows“已安装的应用”中选择 Lanerc Cast。卸载仅删除本程序安装清单中的内容，不会递归删除安装目录中的其他文件。
+默认安装目录：
 
-本版本使用独立安装标记。旧版目录不会被自动接管；请先手动清理旧版，或选择新的空安装目录。
-
-该社区构建暂未使用商业代码签名证书，Windows SmartScreen 可能在首次运行时显示提醒。可在 Release 页面核对 SHA-256。
-
-### PowerShell
-
-源码安装方式仍需自行准备 Macast 0.7；电视播放还需准备 FFmpeg。
-
-1. 从 Macast 托盘菜单完全退出 Macast。
-2. 在 PowerShell 中进入项目目录并运行：
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\install.ps1
+```text
+D:\LanercCast
 ```
 
-3. 重新启动 Macast。
-4. 打开 [http://127.0.0.1:4380/](http://127.0.0.1:4380/) 进入控制中心。
-
-安装程序会自动检测 PotPlayer 和 FFmpeg，并将原配置备份到 Macast 配置目录的 `backup` 文件夹。升级安装会保留当前播放位置、电视和声音设置。
+实际安装目录可在安装器中自定义。运行组件、配置、日志和备份均位于所选目录下；PotPlayer 是可选的独立软件，不会由本项目删除。
 
 ## 使用
 
-### 本机播放
+### 电脑播放
 
-在控制中心选择“本机播放”，再选择 PotPlayer 或 Macast 内置播放器。随后在 Lanerc 中投屏到 Macast 设备。
+1. 启动 Lanerc Cast；
+2. 在控制中心选择“本机播放”；
+3. 选择 PotPlayer 或内置播放器；
+4. 在手机应用中选择电脑上的 DLNA 设备进行投屏。
 
-### 电视播放
+### 电视中转
 
-1. 选择“电视播放”；
-2. 扫描并选择目标电视；
-3. 选择声音随电视输出或从电脑输出；
-4. 保存设置后，在 Lanerc 中投屏到 Macast 设备。
+1. 在控制中心选择“电视播放”；
+2. 扫描并选择同一局域网中的电视；
+3. 选择电视声音或电脑声音输出；
+4. 保存设置后，从手机应用投屏到 Lanerc Cast。
 
-“随电视输出”同步最稳定。“从电脑输出”属于实验性功能：电视的 DLNA 缓冲时间通常不会通过标准接口准确上报，因此可能需要调整固定声音延迟。
+电视端的 DLNA 缓冲和进度上报由电视固件决定。电脑声音与电视画面分离属于实验性模式，可能需要调整延迟；如果优先稳定播放，请让声音随电视输出。
 
 ## 工作方式
 
 ```text
-Lanerc ──DLNA──> Macast / Lanerc Cast
-                       ├── HLS 修复 ──> PotPlayer / 内置播放器
-                       └── FFmpeg 转码 ──DLNA──> 电视
+手机应用 ──DLNA──> Lanerc Cast / Macast
+                         ├── HLS 图片前缀修复 ──> PotPlayer / 内置播放器
+                         └── FFmpeg 转码 ──DLNA──> 电视
 ```
 
-控制中心仅监听 `127.0.0.1`。上游媒体地址在本地代理中以哈希标识保存，不直接暴露在代理 URL 中。
+控制中心和本地媒体代理默认只监听 `127.0.0.1`。电视发现依赖局域网 SSDP/DLNA；VPN、虚拟网卡、访客网络隔离和 Windows 防火墙可能阻止发现。
 
 ## 故障排查
 
-### 找不到电视
+- **手机找不到电脑设备**：确认电脑和手机在同一局域网，允许 Macast 通过 Windows 专用网络防火墙；
+- **找不到电视**：在电视上开启 DLNA/媒体投放，关闭 VPN 或网络隔离后重新扫描；
+- **电视无法播放**：确认控制中心显示 FFmpeg 已就绪，并查看安装目录 `config\Macast\lanerc_tv.log`；
+- **电脑能播、电视不能播**：确认使用 v2.3.1 或更高版本，该版本包含 PNG/JPEG 前缀分片修复；
+- **音画不同步**：优先使用电视声音输出，或关闭自动读取进度并调整固定延迟。
 
-- 确认电脑和电视位于同一局域网；
-- 在电视上开启 DLNA 或媒体投放功能；
-- 暂时关闭 VPN、虚拟网卡或网络隔离后重新扫描；
-- 允许 Macast 通过 Windows 专用网络防火墙。
+## 开发
 
-### 电视无法播放
-
-- 在控制中心“运行环境”中确认 FFmpeg 已就绪；
-- 查看 `lanerc_tv.log` 和 `lanerc_cast.log`；
-- 部分电视会对实时流缓存数秒，这是电视端行为。
-
-### 音画不同步
-
-优先选择“随电视输出”。电脑声音输出无法保证所有电视自动同步，可关闭“尝试读取电视播放进度”并调整固定声音延迟。
-
-## 卸载
-
-完全退出 Macast 后运行：
-
-```powershell
-.\uninstall.ps1
-```
-
-## 开发验证
+需要 Windows 10/11、Python 3.10+ 和测试依赖。运行测试：
 
 ```powershell
 python -m unittest discover -s tests -v
+```
+
+控制中心页面的浏览器测试：
+
+```powershell
 python tests\playwright_pro.py
 ```
 
-## License
+仓库中的 `launcher.py` 是安装器和已安装启动器的共同入口。发布 EXE 时，需要将 Macast、FFmpeg 和许可证文件放入构建暂存目录，再使用 PyInstaller spec 打包。
 
-本项目代码采用 [MIT License](LICENSE)。随 EXE 分发的 Macast 和 FFmpeg 组件分别遵循其 GPLv3 许可证，相关文本和来源说明见 [`third_party/`](third_party/)。
+## 许可证
 
-## 参与贡献
+本项目自身代码采用 [MIT License](LICENSE)。随 EXE 分发的 Macast 和 FFmpeg 组件分别遵循 GPLv3，许可证文本和来源说明见 [`third_party/`](third_party/)。
 
-欢迎提交可复现的问题报告、兼容性信息和改进建议。提交前请先阅读 [贡献指南](CONTRIBUTING.md)，不要在 Issue 或日志中粘贴账号、Cookie、完整媒体地址或私人 IP 信息。
+## 贡献与安全
+
+提交问题前请阅读 [贡献指南](CONTRIBUTING.md)，并删除日志中的账号、Cookie、完整媒体地址和私人 IP。安全问题请按照 [安全策略](SECURITY.md) 私下报告，不要直接发布到公开 Issue。
