@@ -27,8 +27,36 @@ _PLAYLIST_TYPES = {
 _URI_ATTRIBUTE = re.compile(r'URI=("|\')(.*?)(\1)', re.IGNORECASE)
 
 
+def _has_mpeg_ts_sync(data, offset):
+    return (
+        len(data) > offset + 376
+        and data[offset] == 0x47
+        and data[offset + 188] == 0x47
+        and data[offset + 376] == 0x47
+    )
+
+
+def _png_payload_offset(data):
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return 0
+    position = 8
+    while position + 12 <= len(data):
+        length = int.from_bytes(data[position : position + 4], "big")
+        chunk_type = data[position + 4 : position + 8]
+        chunk_end = position + 12 + length
+        if chunk_end > len(data):
+            return 0
+        if chunk_type == b"IEND":
+            return chunk_end if _has_mpeg_ts_sync(data, chunk_end) else 0
+        position = chunk_end
+    return 0
+
+
 def _ts_payload_offset(data):
-    """Return the MPEG-TS offset after a tiny JPEG, or zero if not disguised."""
+    """Return MPEG-TS offset after a small JPEG/PNG, or zero if not disguised."""
+    png_offset = _png_payload_offset(data)
+    if png_offset:
+        return png_offset
     if not data.startswith(b"\xff\xd8"):
         return 0
 
@@ -38,12 +66,7 @@ def _ts_payload_offset(data):
         if eoi < 0:
             return 0
         offset = eoi + 2
-        if (
-            len(data) > offset + 376
-            and data[offset] == 0x47
-            and data[offset + 188] == 0x47
-            and data[offset + 376] == 0x47
-        ):
+        if _has_mpeg_ts_sync(data, offset):
             return offset
         search_from = offset
 
@@ -163,7 +186,7 @@ class _HLSBridge:
 
             offset = _ts_payload_offset(prefix)
             if offset:
-                logger.info("Removed %s-byte JPEG prefix from HLS segment", offset)
+                logger.info("Removed %s-byte image prefix from HLS segment", offset)
                 prefix = prefix[offset:]
                 content_type = "video/mp2t"
 

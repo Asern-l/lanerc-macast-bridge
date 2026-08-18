@@ -41,6 +41,19 @@ class PayloadDetectionTests(unittest.TestCase):
     def test_rejects_plain_jpeg(self):
         self.assertEqual(plugin._ts_payload_offset(b"\xff\xd8image\xff\xd9"), 0)
 
+    def test_finds_mpeg_ts_after_png(self):
+        png = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x00IEND" + (b"\x00" * 4)
+        packet = b"\x47" + (b"x" * 187)
+        self.assertEqual(plugin._ts_payload_offset(png + packet * 3), len(png))
+
+    def test_rejects_plain_png(self):
+        png = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x00IEND" + (b"\x00" * 4)
+        self.assertEqual(plugin._ts_payload_offset(png), 0)
+
+    def test_rejects_malformed_png_chunk(self):
+        malformed = b"\x89PNG\r\n\x1a\n" + b"\xff\xff\xff\xffIEND"
+        self.assertEqual(plugin._ts_payload_offset(malformed), 0)
+
     def test_rejects_plain_transport_stream(self):
         packet = b"\x47" + (b"x" * 187)
         self.assertEqual(plugin._ts_payload_offset(packet * 3), 0)
