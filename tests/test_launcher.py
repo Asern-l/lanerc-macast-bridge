@@ -56,6 +56,7 @@ class LauncherInstallTests(unittest.TestCase):
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
             self.assertEqual(settings["Macast_Renderer"], "Lanerc Cast")
             self.assertEqual(settings["LanercOutputMode"], "local")
+            self.assertEqual(settings["LanercPotPlayerPath"], "")
             self.assertFalse(settings["LanercAutoSync"])
             self.assertTrue(launcher.installation_current())
 

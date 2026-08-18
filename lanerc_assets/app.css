@@ -111,6 +111,16 @@ select {
   border: 1px solid var(--line-strong);
   border-radius: 6px;
 }
+.path-field { max-width: 720px; margin-top: 16px; }
+.path-field input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+}
 .inline-state { min-width: 190px; min-height: 42px; padding: 10px 12px; color: var(--muted); background: #e9eef1; border-radius: 5px; font-size: 12px; }
 .inline-state.ok { color: #176b4b; background: #e7f5ee; }
 .inline-state.missing { color: var(--danger); background: #faecea; }

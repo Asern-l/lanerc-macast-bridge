@@ -8,6 +8,7 @@ Lanerc Cast 是面向 Windows 的 Macast 兼容扩展，让 Lanerc 的 DLNA 投�
 
 - 修复部分 Lanerc HLS 分片带 JPEG 前缀而无法播放的问题；
 - 自动选择已安装的 PotPlayer，未安装时使用 Macast 内置播放器；
+- 支持手动填写 PotPlayer 程序路径，非标准安装位置也可使用；
 - 实时发现同一局域网中的 DLNA 电视；
 - 使用 FFmpeg 转码为兼容性较高的 H.264、AAC 和 MPEG-TS；
 - 可选将电视画面与电脑声音分离，用于连接电脑的耳机；
@@ -27,7 +28,7 @@ EXE 已内置 Macast 0.7 运行引擎和 FFmpeg，不需要用户另外安装。
 
 ### EXE（推荐）
 
-从 [Releases](https://github.com/Asern-l/lanerc-macast-bridge/releases) 下载 `LanercCast-v2.2.0-win64-standalone.exe`，直接双击运行。首次启动时选择运行时目录即可自定义安装盘符。启动器会准备内置运行组件、自动安装或升级插件、保留现有设置、启动 DLNA 引擎并打开控制中心。
+从 [Releases](https://github.com/Asern-l/lanerc-macast-bridge/releases) 下载 `LanercCast-v2.2.1-win64-standalone.exe`，直接双击运行。首次启动时选择运行时目录即可自定义安装盘符。启动器会准备内置运行组件、自动安装或升级插件、保留现有设置、启动 DLNA 引擎并打开控制中心。
 
 该社区构建暂未使用商业代码签名证书，Windows SmartScreen 可能在首次运行时显示提醒。可在 Release 页面核对 SHA-256。
 

@@ -17,7 +17,7 @@ from tkinter import filedialog, messagebox, ttk
 
 
 APP_NAME = "Lanerc Cast"
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.2.1"
 CONTROL_URL = "http://127.0.0.1:4380/"
 INSTALL_LOCATION_FILE = "LanercCast-location.json"
 PLUGIN_FILES = (
@@ -291,6 +291,7 @@ def install_plugin():
     settings["Macast_Renderer"] = APP_NAME
     settings.setdefault("LanercOutputMode", "local")
     settings.setdefault("LanercLocalPlayer", "potplayer" if potplayer else "mpv")
+    settings.setdefault("LanercPotPlayerPath", "")
     settings.setdefault("LanercTVAudio", "tv")
     settings.setdefault("LanercAudioDelay", 2.0)
     settings.setdefault("LanercAutoSync", False)

@@ -31,7 +31,7 @@ if (Test-Path -LiteralPath $settingsPath) {
     if ($settings.Macast_Renderer -in @('Lanerc Cast', 'Lanerc Cast Pro', 'Lanerc PotPlayer Renderer', 'Lanerc MPV Renderer', 'Lanerc TV Renderer')) {
         $settings.Macast_Renderer = 'MPV Renderer'
     }
-    foreach ($name in @('LanercOutputMode', 'LanercLocalPlayer', 'LanercTVAudio', 'LanercAudioDelay', 'LanercAutoSync', 'LanercControlPort', 'LanercTVIP', 'LanercTVLocation', 'LanercFFmpegPath', 'LanercRelayPort')) {
+    foreach ($name in @('LanercOutputMode', 'LanercLocalPlayer', 'LanercPotPlayerPath', 'LanercTVAudio', 'LanercAudioDelay', 'LanercAutoSync', 'LanercControlPort', 'LanercTVIP', 'LanercTVLocation', 'LanercFFmpegPath', 'LanercRelayPort')) {
         $settings.PSObject.Properties.Remove($name)
     }
     [IO.File]::WriteAllText(

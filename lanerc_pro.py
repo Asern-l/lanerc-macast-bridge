@@ -4,7 +4,7 @@
 # <macast.title>Lanerc Cast</macast.title>
 # <macast.renderer>LanercProRenderer</macast.renderer>
 # <macast.platform>win32</macast.platform>
-# <macast.version>2.2.0</macast.version>
+# <macast.version>2.2.1</macast.version>
 # <macast.host_version>0.7</macast.host_version>
 # <macast.author>Asern-l</macast.author>
 # <macast.desc>Reliable local playback and optional DLNA TV compatibility relay.</macast.desc>
@@ -40,7 +40,7 @@ if not any(isinstance(handler, logging.FileHandler) for handler in logger.handle
     logger.addHandler(file_handler)
 
 APP_NAME = "Lanerc Cast"
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.2.1"
 ASSET_TYPES = {
     ".css": "text/css; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
@@ -55,11 +55,12 @@ class ProSetting(Enum):
     LanercTVAudio = 9104
     LanercAudioDelay = 9105
     LanercAutoSync = 9106
+    LanercPotPlayerPath = 9107
 
 
 class _ControlHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
-    server_version = "LanercCast/2.2.0"
+    server_version = "LanercCast/2.2.1"
 
     def _json(self, data, status=200):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -183,9 +184,15 @@ class LanercProRenderer(Renderer):
         configured = str(
             Setting.get(ProSetting.LanercLocalPlayer, "potplayer") or "potplayer"
         )
-        if configured == "potplayer" and _find_potplayer():
+        if configured == "potplayer" and self._potplayer_path():
             return "potplayer"
         return "mpv"
+
+    def _potplayer_path(self):
+        configured = str(Setting.get(ProSetting.LanercPotPlayerPath, "") or "").strip()
+        if configured and os.path.isfile(configured):
+            return configured
+        return _find_potplayer()
 
     def _desired_backend(self):
         return "tv" if self._mode() == "tv" else self._player()
@@ -210,7 +217,7 @@ class LanercProRenderer(Renderer):
                 include_audio=self._tv_audio() == "tv",
             )
         if key == "potplayer":
-            return LanercPotPlayerRenderer()
+            return LanercPotPlayerRenderer(player_path=self._potplayer_path())
         return LanercHLSRenderer()
 
     def _ensure_backend(self):
@@ -237,7 +244,9 @@ class LanercProRenderer(Renderer):
                     self.audio_backend = None
                 return None
             if self.audio_backend is None:
-                self.audio_backend = LanercPotPlayerRenderer(hidden=True)
+                self.audio_backend = LanercPotPlayerRenderer(
+                    hidden=True, player_path=self._potplayer_path()
+                )
                 self.audio_backend.start()
                 if self.title:
                     self.audio_backend.set_media_title(self.title)
@@ -271,7 +280,10 @@ class LanercProRenderer(Renderer):
         selected_device = next(
             (item for item in devices if item["host"] == selected_ip), None
         )
-        potplayer_path = _find_potplayer()
+        potplayer_path = self._potplayer_path()
+        configured_potplayer_path = str(
+            Setting.get(ProSetting.LanercPotPlayerPath, "") or ""
+        ).strip()
         ffmpeg_path = _find_ffmpeg()
         warnings = []
         if self._mode() == "tv" and not ffmpeg_path:
@@ -287,6 +299,7 @@ class LanercProRenderer(Renderer):
             },
             "mode": self._mode(),
             "player": self._player(),
+            "potplayer_path": configured_potplayer_path,
             "selected_tv": selected_ip,
             "selected_tv_name": selected_device["name"] if selected_device else "",
             "tv_audio": self._tv_audio(),
@@ -340,20 +353,34 @@ class LanercProRenderer(Renderer):
             raise ValueError("声音延迟无效")
         auto_sync = bool(data.get("auto_sync", self._auto_sync()))
         selected_tv = str(data.get("selected_tv", "") or "").strip()
+        potplayer_path = str(data.get("potplayer_path", "") or "").strip()
         if mode not in ("local", "tv"):
             raise ValueError("输出方式无效")
         if player not in ("potplayer", "mpv"):
             raise ValueError("本机播放器无效")
+        if len(potplayer_path) > 1024:
+            raise ValueError("PotPlayer 路径过长")
+        if potplayer_path and (
+            not potplayer_path.lower().endswith(".exe")
+            or not os.path.isfile(potplayer_path)
+        ):
+            raise ValueError("PotPlayer 程序路径无效，请选择现有的 EXE 文件")
         if tv_audio not in ("tv", "computer"):
             raise ValueError("声音输出方式无效")
-        if tv_audio == "computer" and not _find_potplayer():
+        available_potplayer = potplayer_path or _find_potplayer()
+        if tv_audio == "computer" and not available_potplayer:
             raise ValueError("电脑输出声音需要安装 PotPlayer")
         if mode == "tv" and not selected_tv:
             raise ValueError("启用电视播放前，请先选择电视")
 
-        old_signature = (self._desired_backend(), self._tv_audio())
+        old_signature = (
+            self._desired_backend(),
+            self._tv_audio(),
+            self._potplayer_path(),
+        )
         Setting.set(ProSetting.LanercOutputMode, mode)
         Setting.set(ProSetting.LanercLocalPlayer, player)
+        Setting.set(ProSetting.LanercPotPlayerPath, potplayer_path)
         Setting.set(ProSetting.LanercTVAudio, tv_audio)
         Setting.set(ProSetting.LanercAudioDelay, audio_delay)
         Setting.set(ProSetting.LanercAutoSync, auto_sync)
@@ -364,7 +391,11 @@ class LanercProRenderer(Renderer):
             )
         if selected_device is not None:
             Setting.set(TVSetting.LanercTVLocation, selected_device["location"])
-        if old_signature != (self._desired_backend(), self._tv_audio()):
+        if old_signature != (
+            self._desired_backend(),
+            self._tv_audio(),
+            self._potplayer_path(),
+        ):
             with self.backend_lock:
                 self.media_generation += 1
                 if self.backend is not None:

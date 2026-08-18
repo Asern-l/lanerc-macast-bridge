@@ -45,10 +45,10 @@ def _find_potplayer():
 
 
 class LanercPotPlayerRenderer(Renderer):
-    def __init__(self, hidden=False):
+    def __init__(self, hidden=False, player_path=None):
         super(LanercPotPlayerRenderer, self).__init__()
         self.hls_bridge = _HLSBridge()
-        self.player_path = _find_potplayer()
+        self.player_path = player_path if player_path and os.path.isfile(player_path) else _find_potplayer()
         self.hidden = hidden
         self.proc = None
         self.position = 0

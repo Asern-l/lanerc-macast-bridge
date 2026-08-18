@@ -1,8 +1,9 @@
 const state = {
-  app: { name: 'Lanerc Cast', version: '2.2.0' },
+  app: { name: 'Lanerc Cast', version: '2.2.1' },
   service: { state: 'starting', control_port: 4380, active_backend: null },
   mode: 'local',
   player: 'potplayer',
+  potplayer_path: '',
   selected_tv: '',
   selected_tv_name: '',
   tv_audio: 'tv',
@@ -23,6 +24,7 @@ function editableSnapshot(source = state) {
   return {
     mode: source.mode,
     player: source.player,
+    potplayer_path: source.potplayer_path || '',
     selected_tv: source.selected_tv,
     tv_audio: source.tv_audio,
     audio_delay: Number(source.audio_delay),
@@ -67,7 +69,7 @@ function renderService() {
   const target = $('service-state');
   target.className = `service-state ${ready ? 'ready' : 'error'}`;
   target.lastElementChild.textContent = ready ? 'Macast 服务正常' : '服务正在启动';
-  $('app-version').textContent = state.app?.version || '2.2.0';
+  $('app-version').textContent = state.app?.version || '2.2.1';
 }
 
 function renderWarnings() {
@@ -96,6 +98,7 @@ function renderPlayer() {
   select.value = state.player;
   select.options[0].disabled = !state.availability?.potplayer;
   const target = $('player-state');
+  $('potplayer-path').value = state.potplayer_path || '';
   if (state.availability?.potplayer) {
     target.className = 'inline-state ok';
     target.textContent = 'PotPlayer 已就绪';
@@ -256,6 +259,10 @@ $('mode-tv').addEventListener('click', () => {
   if (!state.devices.length) scanDevices({ announce: false });
 });
 $('player').addEventListener('change', event => { state.player = event.target.value; render(); });
+$('potplayer-path').addEventListener('input', event => {
+  state.potplayer_path = event.target.value;
+  renderActions();
+});
 document.querySelectorAll('input[name="tv-audio"]').forEach(input => {
   input.addEventListener('change', event => { state.tv_audio = event.target.value; render(); });
 });

@@ -77,6 +77,7 @@ if (Test-Path -LiteralPath $settingsPath) {
 $settings | Add-Member -NotePropertyName Macast_Renderer -NotePropertyValue 'Lanerc Cast' -Force
 Add-DefaultSetting $settings 'LanercOutputMode' 'local'
 Add-DefaultSetting $settings 'LanercLocalPlayer' $(if ($potPlayer) { 'potplayer' } else { 'mpv' })
+Add-DefaultSetting $settings 'LanercPotPlayerPath' ''
 Add-DefaultSetting $settings 'LanercTVAudio' 'tv'
 Add-DefaultSetting $settings 'LanercAudioDelay' 2.0
 Add-DefaultSetting $settings 'LanercAutoSync' $false
@@ -90,7 +91,7 @@ $json = ConvertTo-AsciiJson $settings
 [IO.File]::WriteAllText($settingsPath, $json, [Text.UTF8Encoding]::new($false))
 
 Write-Host ''
-Write-Host 'Lanerc Cast 2.2.0 安装完成' -ForegroundColor Green
+Write-Host 'Lanerc Cast 2.2.1 安装完成' -ForegroundColor Green
 Write-Host "  插件目录：$rendererDir"
 Write-Host '  控制中心：http://127.0.0.1:4380/'
 Write-Host "  本机播放器：$(if ($potPlayer) { 'PotPlayer' } else { 'Macast 内置播放器' })"
