@@ -149,7 +149,15 @@ def validate_install_location(path):
     }
     if path in protected:
         raise ValueError("不能直接安装到系统目录或用户主目录。")
-    if path.exists() and not (path / INSTALL_MARKER).is_file():
+    marker = path / INSTALL_MARKER
+    marker_is_current = False
+    if marker.is_file():
+        try:
+            data = json.loads(marker.read_text(encoding="utf-8"))
+            marker_is_current = data.get("product") == "LanercCast" and data.get("version") == APP_VERSION
+        except (OSError, ValueError, TypeError):
+            pass
+    if path.exists() and not marker_is_current:
         try:
             entries = {item.name for item in path.iterdir()}
             if entries:
@@ -285,7 +293,7 @@ def schedule_owned_file_cleanup():
     if not marker.is_file():
         raise RuntimeError("未找到本版本安装标记，为避免误删已停止卸载。")
     marker_data = json.loads(marker.read_text(encoding="utf-8"))
-    if marker_data.get("product") != "LanercCast":
+    if marker_data.get("product") != "LanercCast" or marker_data.get("version") != APP_VERSION:
         raise RuntimeError("安装标记无效，为避免误删已停止卸载。")
 
     paths = [root / name for name in OWNED_DIRECTORIES]
